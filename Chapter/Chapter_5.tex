@@ -1,0 +1,390 @@
+\chapter{基于交互感知的异构路径传播延续预测模型}
+
+\section{问题分析}
+
+第三章的系统需求分析将评论传播评估划分为消息层、级联层与交互类型层三个维度。第四章针对消息层提出了评论传播价值评估模型，预测单条评论是否会在时间窗口$T$内获得至少一次回复（1跳增长）。然而，单条评论获得回复仅代表信息引发了即时关注，而信息能否沿讨论路径持续扩散、引发多轮讨论，才是衡量传播延续能力的核心特征\cite{ziegler2019predicting}。本章进一步关注级联层与交互类型层的评估需求，聚焦于路径级别的传播延续预测——判断评论树中的节点能否在时间窗口$T$内实现2跳增长（即至少产生"回复的回复"），并显式建模路径上不同主体交互序列对传播延续的影响。
+
+传播延续预测面临以下难点。首先，传播具有路径依赖性：当前节点能否引发持续讨论，不仅取决于其自身内容，还受祖先节点的话题方向、讨论热度等上下文因素影响，同一条评论出现在高热度讨论链和冷门话题下，其引发后续回复的概率截然不同，Cheng等人\cite{cheng2014cascades}在级联增长预测研究中也证实了级联结构特征与时序特征对增长趋势的显著预测能力。其次，在多主体共存场景下，路径呈现异构性：人类用户与AI代理的内容生成机制、表达风格和互动倾向存在本质差异，路径上的人-机交互序列（如 Human$\to$Agent$\to$Human）可能呈现特定的传播模式，需要模型具备对不同主体及其交互类型的感知能力。此外，讨论路径普遍较短，模型需要在有限的路径长度下有效提取传播模式信息。
+
+已有的信息级联预测研究\cite{cheng2014cascades,medvedev2020modelling}主要关注级联规模（如转发总量）或讨论树结构的宏观动态建模，通常将级联中的参与者视为同质主体，不区分人类用户与AI代理的行为差异，也不显式建模路径上相邻节点间的交互类型。节点级方法仅基于当前节点特征进行预测，忽略了祖先节点的上下文信息对传播延续的影响。标准的序列建模方法（如直接使用LSTM或Transformer编码路径）虽然能够捕捉节点的顺序关系，但缺乏对边级异构交互模式的显式感知，难以区分"人类回复AI"与"AI回复人类"等不同场景对传播延续的差异化影响。
+
+针对上述问题，本章提出交互感知的异构路径编码器（Interaction-aware Heterogeneous Path Encoder, IHPE），以评论树中从根节点到当前节点的完整路径为输入单元，通过主体感知节点编码注入主体身份信息，通过交互类型编码显式建模路径上四种主体交互模式（H$\to$H / H$\to$A / A$\to$H / A$\to$A），在LSTM序列编码的基础上实现端到端的传播延续预测。模型遵循"轻量特征注入，避免重参数化"的设计原则，以适应AI代理样本稀疏的数据特征。
+
+\section{任务定义}
+
+\subsection{形式化定义}
+
+一棵评论树定义为$\mathcal{T} = (V, E, r)$，其中$V = \{v_0, v_1, \ldots, v_n\}$为节点集合，$v_0 = r$为根节点（原始推文）；$E \subseteq V \times V$为有向边集合，$(v_i, v_j) \in E$表示$v_j$是$v_i$的直接回复；每个节点$v_i$携带文本、发布时间、主体类型等属性。对于节点$v_k$，其路径$P_k = [v_0, v_1, \ldots, v_k]$定义为从根节点到$v_k$的有序节点序列。
+
+\subsection{预测任务}
+
+本任务以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入，包含路径上每个节点的特征，输出为二分类预测，判断节点$v_k$在时间窗口$T$内能否实现2跳增长。标签定义如下：
+
+\begin{equation}
+y_k = \begin{cases}
+1, & \exists\, v \in \mathrm{desc}(v_k),\; \mathrm{depth}(v) \geq \mathrm{depth}(v_k) + 2 \;\wedge\; t(v) - t(v_k) \leq T \\
+0, & \max_{v \in \mathrm{desc}(v_k)}[\mathrm{depth}(v) - \mathrm{depth}(v_k)] < 2 \;\wedge\; A_k \geq T
+\end{cases}
+\end{equation}
+
+其中$A_k = t_{\mathrm{obs}}(v_k) - t(v_k)$为节点$v_k$的随访时长。
+
+右删失约束$A_k \geq T$确保$y=0$的语义是"窗口内确实未发生2跳增长"，而非"观测时间不足、尚未观测完全"。若$A_k < T$，则该节点对"是否在$T$内发生2跳增长"而言属于右删失（right-censored）\cite{wang2019machine}样本，需予以剔除；观测截止时间$t_{\text{obs}}$缺失的节点同样无法判断随访时长，一并移除。
+
+从语义上看，$y=1$表示该节点引发了持续讨论（至少存在"回复的回复"），$y=0$表示该节点的讨论在1跳内终止或无回复（且观测窗口已满足$A_k \geq T$）。时间窗口沿用第四章的$T = 12\text{h}$，以保持两章评估框架的一致性，便于系统整合；$T=12\text{h}$时正例率约11\%，类别分布可接受。
+
+\section{方法设计}
+
+\subsection{模型整体架构}
+
+在多主体共存的社交媒体环境中，评论树的路径呈现出异构性\cite{hu2020heterogeneous}，主要体现在两个层面：
+
+\textbf{（1）节点异构性}：路径上的节点由不同主体（Human/Agent）发布，其内容生成机制、表达风格、互动倾向存在本质差异。
+
+\textbf{（2）边异构性}：路径上相邻节点间的交互存在四种类型，每种类型对传播延续的影响不同，如表\ref{tab:interaction_type}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{路径边异构交互类型定义与传播特征假设}{Definition and Propagation Characteristic Hypotheses of Heterogeneous Edge Interaction Types}
+  \label{tab:interaction_type}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{6cm}}
+    \toprule
+    交互类型 & 符号 & 含义 & 传播特征假设 \\
+    \midrule
+    Human$\to$Human & H$\to$H & 人类回复人类 & 自然讨论，传播延续取决于话题热度 \\
+    Human$\to$Agent & H$\to$A & 人类回复AI & 可能是质疑/追问AI，易引发后续讨论 \\
+    Agent$\to$Human & A$\to$H & AI回复人类 & AI响应后人类可能继续追问 \\
+    Agent$\to$Agent & A$\to$A & AI回复AI & 较少见，传播模式待观察 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+数据分析显示Agent节点的2跳增长率（52.75\%）远高于Human（10.45\%），说明主体类型及其交互模式是影响传播延续的关键因素。针对这一多主体异构路径的建模需求，本章提出交互感知的异构路径编码器（Interaction-aware Heterogeneous Path Encoder, IHPE），遵循"轻量特征注入，避免重参数化"的设计原则：将主体类型信息作为特征输入而非参数选择器，在保持多主体感知能力的同时规避Agent侧参数过拟合风险；路径聚合采用均匀池化（Mean Pooling），在路径长度中位数仅为3的数据特征下以更稳健的方式提取路径级表示。
+
+IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分类预测"的五阶段架构，以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入单元，端到端预测节点$v_k$的传播延续概率。模型整体结构如图\ref{fig:ihpe_arch}所示。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
+  \bicaption{交互感知的异构路径编码器（IHPE）整体结构}{Overall Architecture of Interaction-aware Heterogeneous Path Encoder (IHPE)}
+  \label{fig:ihpe_arch}
+\end{figure}
+
+模型的处理流程可概括为以下五个阶段：
+
+\textbf{（1）主体感知节点编码阶段}：对路径上每个节点，提取文本语义（BGE，768维）与情感（3维）作为共享特征，拼接主体类型嵌入后经统一投影矩阵映射至$d$维表示空间，生成节点表示序列$[\mathbf{x}_0, \ldots, \mathbf{x}_k]$。共享投影确保Human与Agent节点在同一表示空间内可比，主体类型嵌入以轻量参数（$2 \times d_{\text{type}}$）注入主体身份信息。
+
+\textbf{（2）交互类型注入阶段}：对路径中每条有向边，查询其交互类型嵌入（H$\to$H / H$\to$A / A$\to$H / A$\to$A四类之一），并将其融合至目标节点表示，生成交互增强表示序列$[\mathbf{x}'_0, \ldots, \mathbf{x}'_k]$。该阶段使模型能够显式感知边级的多主体交互模式。
+
+\textbf{（3）序列编码阶段}：将交互增强后的节点序列输入单向LSTM，捕捉路径从根节点到当前节点的顺序依赖，输出上下文表示序列$[\mathbf{h}_0, \ldots, \mathbf{h}_k]$。
+
+\textbf{（4）路径聚合阶段}：对序列编码输出进行Mean Pooling得到全局路径表示，与末节点表示$\mathbf{h}_k$拼接后经MLP映射为路径级表示$\mathbf{h}_{\text{path}}$，同时保留全局上下文与末节点局部信息。
+
+\textbf{（5）分类预测阶段}：路径表示经MLP分类头与Sigmoid函数，输出节点$v_k$在时间窗口$T$内实现2跳增长的概率。训练采用带正类权重的二元交叉熵损失以缓解类别不平衡。
+
+各阶段的具体设计与参数形式详见5.3.2—5.3.6节。
+
+\subsection{主体感知节点编码层}
+
+对路径中的每个节点$v_i$，提取共享特征并注入主体类型信息。
+
+\textbf{（1）共享特征提取}
+
+所有节点共享相同的特征提取器：文本语义特征由BGE Encoder提取，输出768维语义表示；情感特征由Sentiment Model提取，输出3维情感概率分布$(p_{\text{pos}}, p_{\text{neu}}, p_{\text{neg}})$。
+
+\textbf{（2）主体类型嵌入}
+
+为每种主体类型学习一个轻量级嵌入向量：
+
+\begin{equation}
+\mathbf{e}_{\text{type}}^{(i)} = \text{Embedding}_{\text{type}}(a_i) \in \mathbb{R}^{d_{\text{type}}}
+\end{equation}
+
+其中$a_i \in \{0, 1\}$为主体类型（Human/Agent），$d_{\text{type}}$为类型嵌入维度（默认取16）。
+
+\textbf{（3）特征拼接与共享投影}
+
+将共享特征与主体类型嵌入拼接后，通过统一的投影矩阵映射到模型空间：
+
+\begin{equation}
+\mathbf{x}_i^{\text{aug}} = [\mathbf{e}_{\text{text}}; \mathbf{e}_{\text{sentiment}}; \mathbf{e}_{\text{type}}^{(i)}]
+\end{equation}
+
+\begin{equation}
+\mathbf{x}_i = \mathbf{W}_{\text{proj}} \mathbf{x}_i^{\text{aug}} + \mathbf{b}_{\text{proj}}
+\end{equation}
+
+其中$\mathbf{W}_{\text{proj}} \in \mathbb{R}^{d \times (768 + 3 + d_{\text{type}})}$为所有节点共享的投影矩阵。
+
+训练集中Agent样本约2,442个，仅占全量的2.09\%，参数化能力极为有限。本章遵循"轻量特征注入"原则：共享投影矩阵由全量训练数据充分拟合，主体类型信息仅通过含$2 \times d_{\text{type}} = 32$个参数的嵌入表注入，在保持多主体感知能力的同时规避Agent侧参数过拟合风险。
+
+\subsection{交互类型编码层}
+
+本层显式建模路径上相邻节点间的交互类型，是本章方法的核心创新之一。消融实验（5.4.6节）验证：移除交互类型编码后AUC-PR下降3.04\%，R@P0.8骤降36.4\%，确认该组件为模型的核心贡献。
+
+图\ref{fig:interact_encode}以路径$P=[v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例，展示了本层对路径上所有节点的完整编码过程。对路径上每个节点$v_i$，依据其入边的主体类型组合确定交互类型$e_i$（根节点$v_0$取特殊[ROOT]类型，其余节点取$(a_{i-1}, a_i)$对应的四类之一），查询嵌入表后通过残差融合注入节点表示，输出交互增强表示$\mathbf{x}'_i$。路径中$v_1$（H$\to$A）与$v_3$（H$\to$A）共享同一嵌入向量$\mathbf{e}_{\text{H} \to \text{A}}$，体现了嵌入参数的高效复用。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
+  \bicaption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}{Illustration of Interaction Type Encoding Mechanism}
+  \label{fig:interact_encode}
+\end{figure}
+
+\textbf{（1）交互类型定义}
+
+对于路径中的第$i$个节点（$i \geq 1$），其入边的交互类型定义为：
+
+\begin{equation}
+e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
+\end{equation}
+
+对应四种交互类型：H$\to$H, H$\to$A, A$\to$H, A$\to$A。
+
+\textbf{（2）交互类型嵌入}
+
+为每种交互类型学习一个嵌入向量：
+
+\begin{equation}
+\mathbf{e}_{\text{interact}}^{(i)} = \text{Embedding}_{\text{interact}}(e_i) \in \mathbb{R}^{d}
+\end{equation}
+
+\textbf{（3）交互特征融合}
+
+将交互类型嵌入与节点表示融合：
+
+\begin{equation}
+\mathbf{x}'_i = \mathbf{x}_i + \mathbf{W}_{\text{fuse}} \mathbf{e}_{\text{interact}}^{(i)}
+\end{equation}
+
+对于根节点（$i=0$），使用特殊的[ROOT]交互类型嵌入。
+
+交互类型编码使模型能够区分"Human回复Agent"与"Agent回复Human"等不同场景，对理解多主体传播动态至关重要。该组件有效的关键在于参数极少（$5 \times d = 640$个参数）且不受Agent样本稀疏的制约：H$\to$H边占路径样本的绝大多数，为嵌入表提供充足的训练信号；含Agent的边类型（H$\to$A、A$\to$H、A$\to$A）通过与H$\to$H嵌入的对比获得区分性表示，无需大量独立参数即可建模异构交互。
+
+\subsection{序列编码层}
+
+将交互增强后的节点表示序列输入LSTM\cite{hochreiter1997long}，捕捉路径上的时序依赖关系：
+
+\begin{equation}
+[\mathbf{h}_0, \ldots, \mathbf{h}_k] = \text{LSTM}([\mathbf{x}'_0, \ldots, \mathbf{x}'_k])
+\end{equation}
+
+本章数据的路径长度中位数为3，以短路径为主，模型需要在捕捉顺序信息的同时避免参数冗余，LSTM在以下方面取得平衡。首先，路径从根节点到当前节点具有天然的方向性，相邻节点间的先后回复关系构成有序的交互序列，顺序编码能够捕捉这种方向性带来的传播上下文依赖，而无序聚合将丢失节点间的先后关系。其次，在参数效率方面，Transformer Encoder的多头注意力+FFN参数量较大，在短路径主导的数据分布下过拟合风险高；Bi-LSTM的双向结构在路径预测中意义有限，且参数量翻倍。消融实验也验证了这一选型（详见5.4.5节），在完整IHPE框架下，LSTM编码器在AUC-PR上优于Bi-LSTM（$-0.97\%$）和Transformer（$-0.69\%$）。
+
+由于主体类型信息（5.3.2节）和交互类型信息（5.3.3节）已编码到节点表示中，LSTM可以自动学习利用这些信息建模路径上的传播依赖。
+
+\subsection{路径聚合层}
+
+从序列编码输出中提取路径级表示。
+
+\textbf{（1）均匀池化}
+
+对路径上所有有效节点的表示进行均匀池化：
+
+\begin{equation}
+\mathbf{h}_{\text{seq}} = \frac{1}{k+1}\sum_{i=0}^{k} \mathbf{h}_i
+\end{equation}
+
+选择均匀池化的原因在于，路径长度中位数仅为3，短路径上注意力聚合相比均匀聚合优势有限\cite{maini2020pool}，且引入额外可训练参数（$\mathbf{w} \in \mathbb{R}^d$和偏置$b$）增加过拟合风险。主体类型和交互类型信息已通过前序层编码到$\mathbf{h}_i$中，均匀池化已足以保留这些区分信息。
+
+\textbf{（2）最终路径表示}
+
+融合均匀池化表示与末节点表示：
+
+\begin{equation}
+\mathbf{h}_{\text{path}} = \text{MLP}([\mathbf{h}_{\text{seq}}; \mathbf{h}_k])
+\end{equation}
+
+\subsection{分类预测与训练}
+
+路径表示$\mathbf{h}_{\text{path}}$经MLP分类头与Sigmoid函数输出预测概率：
+
+\begin{equation}
+\hat{y} = \sigma(\text{MLP}(\mathbf{h}_{\text{path}}))
+\end{equation}
+
+训练阶段采用带类别权重的二元交叉熵作为损失函数：
+
+\begin{equation}
+\mathcal{L} = -\frac{1}{N} \sum_{i=1}^{N} \left[ w_{\text{pos}} \cdot y_i \log(\hat{y}_i) + (1 - y_i) \log(1 - \hat{y}_i) \right]
+\end{equation}
+
+其中$w_{\text{pos}} = N_{\text{neg}} / N_{\text{pos}}$用于处理类别不平衡（正例率约11\%）。
+
+\section{实验设计}
+
+\subsection{数据集}
+
+本章使用与第四章相同的X平台原始数据集（255,754条评论）重构评论树，但不对空文本节点进行过滤。本章的2跳标签由评论树结构与时间戳决定，文本缺失不影响标签有效性；同时，路径级任务中移除中间节点会导致其所有后代节点的路径需要重构，保留空文本节点以维护路径结构完整性，该节点的文本特征以零向量表示。在此基础上进行右删失过滤：移除观测截止时间（$t_{\text{obs}}$）缺失的样本（无法判断随访时长）以及随访时长不足12小时（$A < T$）的样本（$y=0$含义不明确），右删失过滤策略与第四章保持一致。
+
+原始数据集包含255,754个节点，经移除$t_{\text{obs}}$缺失样本（$-64{,}631$）和随访时长不足12小时的样本（$-24{,}580$）后，最终保留166,543个节点用于模型训练与评估。正例率从原始数据集的10.01\%升至11.33\%，印证了右删失样本对$y=0$的污染：被截断观测的节点在12h内未积累到2跳，被错误标记为负例。过滤后数据集的统计信息与标签分布如表\ref{tab:ch5_dataset}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{数据集统计与标签分布（右删失过滤后，$T=12\text{h}$）}{Dataset Statistics and Label Distribution (After Right-Censoring Filtering, $T=12$h)}
+  \label{tab:ch5_dataset}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{5.5cm} >{\centering\arraybackslash}m{6cm}}
+    \toprule
+    指\quad 标 & 数\quad 值 \\
+    \midrule
+    评论树数量 & 701 \\
+    节点总量（Human / Agent） & 166,543（163,055 / 3,488） \\
+    正例率（整体） & 11.33\%（18,877） \\
+    正例率（Human / Agent） & 10.45\% / 52.75\% \\
+    路径长度中位数 / 最大值 & 3 / 276 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{数据划分}
+
+与第四章保持一致，按root\_tweet\_id分组划分为训练集（70\%）、验证集（15\%）和测试集（15\%），采用多随机种子（seed=1/2/3），结果取平均报告。
+
+\subsection{评价指标}
+
+\textbf{（1）整体预测性能}
+
+整体预测性能采用三项指标衡量：AUC-PR（主指标）\cite{davis2006relationship}，适用于类别不平衡场景，综合衡量精度-召回权衡；R@P0.5，即精度阈值为0.5时的召回率，反映中等精度场景下的覆盖能力；R@P0.8，即精度阈值为0.8时的召回率，反映高精度场景下的捕获能力。
+
+\textbf{（2）分主体评估}
+
+分别报告Human / Agent子集上的AUC-PR、R@P0.5、R@P0.8，重点关注模型对Agent高正例率（52.75\%）的捕捉能力。
+
+\subsection{基线模型}
+
+为保证对比实验的公平性，所有模型的节点级输入特征与聚合策略均保持一致，均使用$[\mathbf{e}_{\text{text}}; \mathbf{e}_{\text{sent}}; \mathbf{e}_{\text{type}}]$经共享投影作为节点特征，并采用Mean Pooling + 末节点拼接聚合（Node-Only除外）。此设计确保IHPE相对于基线的全部增益均可归因于交互类型编码机制本身。各基线模型定义如下：
+
+\textbf{（1）Node-Only}：仅使用末节点$v_k$的特征进行预测，不包含任何路径上下文信息，用于验证路径建模的必要性。
+
+\textbf{（2）Mean Pooling}：对路径上所有节点的投影表示进行均匀池化，与末节点表示拼接后直接分类，不使用序列编码器，用于验证序列编码的价值。
+
+\textbf{（3）LSTM}：在Mean Pooling的基础上引入单向LSTM对节点序列进行编码，但不包含交互类型编码，用于作为IHPE的直接对照。
+
+\textbf{（4）Bi-LSTM}：将LSTM替换为双向LSTM，用于考察双向结构在路径预测任务中的效果。
+
+\textbf{（5）Transformer}：将LSTM替换为Transformer Encoder，用于考察注意力机制在短路径数据上的表现。
+
+上述设计中，主体类型（Human/Agent）是节点的客观元数据属性，与文本、情感特征同属节点级信息，应作为所有模型的标准输入。此设计下，LSTM基线与消融变体"w/o 交互类型编码"在逻辑上等价，两者结果可交叉验证，增强实验结论的可信度。
+
+\subsection{对比实验与结果分析}
+
+所有模型使用相同超参数（$d_{\text{model}}=128$，$n_{\text{layers}}=2$，$\text{dropout}=0.2$，$\text{lr}=1\text{e-}4$），每组实验使用3个随机种子取平均。
+
+\textbf{（1）整体性能对比}
+
+整体性能对比结果如表\ref{tab:ch5_overall}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{各模型整体性能对比}{Overall Performance Comparison of All Models}
+  \label{tab:ch5_overall}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm}}
+    \toprule
+    模\quad 型 & AUC-PR（主指标） & R@P0.5 & R@P0.8 \\
+    \midrule
+    Node-Only & 0.2777 & 0.0825 & 0.0043 \\
+    Mean Pooling & 0.3416 & 0.2089 & 0.0353 \\
+    Transformer & 0.3507 & 0.2350 & 0.0450 \\
+    Bi-LSTM & 0.3990 & 0.3226 & 0.0424 \\
+    LSTM & 0.4088 & 0.3136 & 0.0733 \\
+    \textbf{IHPE (Ours)} & \textbf{0.4216} & \textbf{0.3446} & \textbf{0.1152} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（2）分主体性能对比}
+
+分主体性能对比结果如表\ref{tab:ch5_peragent}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{各模型分主体性能对比}{Per-Agent Performance Comparison of All Models}
+  \label{tab:ch5_peragent}
+  \renewcommand\arraystretch{1.5}
+  \footnotesize
+  \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm}}
+    \toprule
+    \multirow{2}{*}{模\quad 型} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    & AUC-PR & R@P0.5 & R@P0.8 & AUC-PR & R@P0.5 & R@P0.8 \\
+    \midrule
+    Node-Only & 0.2200 & 0.0053 & 0.0007 & 0.5759 & 0.6457 & 0.0492 \\
+    Mean Pooling & 0.3002 & 0.1217 & 0.0279 & 0.5821 & 0.8722 & 0.2484 \\
+    Transformer & 0.3145 & 0.1562 & 0.0359 & 0.5794 & 0.8635 & 0.2421 \\
+    Bi-LSTM & 0.3567 & 0.2506 & 0.0452 & 0.7035 & 0.8742 & 0.2484 \\
+    LSTM & 0.3608 & 0.2426 & 0.0403 & 0.7595 & 0.8909 & 0.5740 \\
+    \textbf{IHPE} & \textbf{0.3728} & \textbf{0.2731} & \textbf{0.0635} & \textbf{0.7790} & \textbf{0.8941} & \textbf{0.6072} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+IHPE在所有整体指标和分主体指标上均取得最优。
+
+\textbf{（3）路径建模的必要性}
+
+Node-Only仅使用末节点特征，无任何路径信息。与IHPE相比，AUC-PR下降34.1\%（0.2777 vs 0.4216），R@P0.8几乎为零（0.0043 vs 0.1152），几乎完全丧失高精度预测能力。这表明路径上下文是传播延续预测的必要信息——单节点特征远不足以刻画传播延续能力。
+
+\textbf{（4）序列编码的价值}
+
+Mean Pooling使用路径上所有节点但不进行序列编码，AUC-PR为0.3416。引入LSTM序列编码后提升19.7\%（0.4088）。这说明路径节点的顺序关系包含重要的传播模式信息，不能仅依赖无序聚合。
+
+值得注意的是，Transformer编码器（0.3507）与Mean Pooling（0.3416）差距甚小（$+2.7\%$），远弱于LSTM的提升幅度。原因在于Transformer的多头注意力+FFN参数量较大，在短路径主导的数据分布下过拟合风险高，参数规模与数据特征不匹配，无法有效利用顺序信息。
+
+\textbf{（5）交互类型编码的增益}
+
+IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提升3.1\%（0.4216 vs 0.4088），R@P0.5提升9.9\%，R@P0.8提升57.3\%。在Human和Agent子群上均取得改善。交互类型编码在高精度场景（R@P0.8）的增益尤为显著，说明准确识别交互模式对提升预测置信度具有重要作用。
+
+\subsection{消融实验与结果分析}
+
+消融实验从交互类型编码与主体类型嵌入两个维度验证IHPE各组件的贡献。整体结果如表\ref{tab:ch5_ablation}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{核心组件消融实验结果（整体）}{Ablation Study Results of Core Components (Overall)}
+  \label{tab:ch5_ablation}
+  \renewcommand\arraystretch{1.5}
+  \footnotesize
+  \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm}}
+    \toprule
+    消融变体 & AUC-PR & $\Delta$ & R@P0.5 & $\Delta$ & R@P0.8 & $\Delta$ \\
+    \midrule
+    \textbf{IHPE (Ours)} & \textbf{0.4216} & — & \textbf{0.3446} & — & \textbf{0.1152} & — \\
+    w/o 交互类型编码（= LSTM） & 0.4088 & $-3.04\%$ & 0.3136 & $-9.00\%$ & 0.0733 & $\mathbf{-36.4\%}$ \\
+    w/o 主体类型嵌入 & 0.4117 & $-2.35\%$ & 0.3167 & $-8.09\%$ & 0.1101 & $-4.43\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+分主体结果如表\ref{tab:ch5_ablation_agent}所示。
+
+\begin{table}[H]
+  \centering
+  \bicaption{核心组件消融实验结果（分主体）}{Ablation Study Results of Core Components (Per-Agent)}
+  \label{tab:ch5_ablation_agent}
+  \renewcommand\arraystretch{1.5}
+  \footnotesize
+  \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm}}
+    \toprule
+    \multirow{2}{*}{消融变体} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    & AUC-PR & R@P0.5 & R@P0.8 & AUC-PR & R@P0.5 & R@P0.8 \\
+    \midrule
+    \textbf{IHPE} & \textbf{0.3728} & \textbf{0.2731} & 0.0635 & 0.7790 & 0.8941 & 0.6072 \\
+    w/o 交互类型 & 0.3608 & 0.2426 & 0.0403 & 0.7595 & 0.8909 & 0.5740 \\
+    w/o 主体类型 & 0.3634 & 0.2419 & \textbf{0.0643} & \textbf{0.7814} & \textbf{0.9010} & 0.6064 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+交互类型编码是模型的核心组件。移除后，整体AUC-PR下降3.04\%，R@P0.5下降9.00\%，尤其是R@P0.8骤降36.4\%——高精度场景下对交互类型感知的依赖最为突出。Human子群各指标同步下降（H-PR $-3.2\%$，H-R@0.5 $-11.2\%$，H-R@0.8 $-36.5\%$），Agent子群也出现明显下降（A-PR $-2.5\%$，A-R@0.8 $-5.5\%$）。该组件的参数极少（$5 \times d = 640$个），但作用于路径中每条边，在数据充分的H$\to$H路径和稀疏的含Agent路径上均能提供有效信号。
+
+主体类型嵌入的增益主要体现在Human子群：移除后整体AUC-PR下降2.35\%，H-AUC-PR下降2.56\%，H-R@P0.5下降11.4\%。Agent子群指标未见显著变化，这与预期一致——Agent节点在路径中必然产生H$\to$A / A$\to$H等含Agent的交互类型，交互类型编码已隐式捕捉了Agent身份信息，显式主体类型嵌入对Agent的边际贡献有限。两个组件在信息上互补：交互类型编码捕捉边级关系，主体类型嵌入为Human节点提供节点级身份信号，共同支撑模型对多主体传播模式的感知。主体类型嵌入仅含$2 \times d_{\text{type}} = 32$个参数，在Agent样本稀疏的场景下也能有效学习。
+
+消融实验中各变体的具体配置如下。对于w/o 主体类型嵌入，完整模型的节点特征为$\mathbf{x}_i^{\text{aug}} = [\mathbf{e}_{\text{text}}; \mathbf{e}_{\text{sentiment}}; \mathbf{e}_{\text{type}}^{(i)}]$，经$\mathbf{x}_i = \mathbf{W}_{\text{proj}} \mathbf{x}_i^{\text{aug}} + \mathbf{b}_{\text{proj}}$投影，消融时去掉类型嵌入，仅使用$\mathbf{x}_i^{\text{aug}} = [\mathbf{e}_{\text{text}}; \mathbf{e}_{\text{sentiment}}]$。对于w/o 交互类型编码，完整模型中$\mathbf{x}'_i = \mathbf{x}_i + \mathbf{W}_{\text{fuse}} \mathbf{e}_{\text{interact}}^{(i)}$，消融时直接令$\mathbf{x}'_i = \mathbf{x}_i$；此配置下模型退化为LSTM基线，两者在逻辑上等价，实验结果可交叉验证。
+
+\section{本章小结}
+
+本章提出了交互感知的异构路径编码器（IHPE），通过主体感知节点编码、交互类型编码、LSTM序列编码与均匀池化路径聚合四个组件，实现了多主体环境下路径级别的传播延续预测。实验表明IHPE在所有指标上均取得最优，其中交互类型编码是核心贡献组件。本章模型为系统提供了路径级传播延续预测能力，将在第六章中封装为对应的服务模块。

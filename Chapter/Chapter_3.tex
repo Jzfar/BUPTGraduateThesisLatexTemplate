@@ -58,7 +58,7 @@
 
 系统采用四层架构，自底向上分别为数据层、支撑层、业务层和表现层，整体架构如图\ref{fig:system_arch}所示。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{G5-1/图5-1 系统架构概览图.cropped.pdf}
   \bicaption{系统架构概览图}{System Architecture Overview}
@@ -77,7 +77,7 @@
 
 图\ref{fig:tech_arch}给出了系统的技术架构，标注了各层采用的具体技术。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{G5-2/图5-2 系统技术架构图.cropped.pdf}
   \bicaption{系统技术架构图}{System Technology Architecture}
@@ -88,7 +88,7 @@
 
 系统按功能职责划分为数据管理和评估分析与展示两个子系统，共包含6个功能模块，系统模块结构如图\ref{fig:module_design}所示。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{G5-3/图5-3 系统模块设计图.cropped.pdf}
   \bicaption{系统模块设计图}{System Module Design}
@@ -101,7 +101,7 @@
 
 系统的核心业务流程如图\ref{fig:business_flow}所示，涵盖从数据导入到评估结果展示的端到端流程：
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{G5-4/图5-4 系统业务流程图.cropped.pdf}
   \bicaption{系统业务流程图}{System Business Flow}
@@ -153,7 +153,7 @@
 
 记录每次数据导入操作的元信息与处理进度。该表以每次导入操作为单位，保存导入文件名称、导入时间、各预处理阶段（去重、质量过滤、右删失过滤）的样本计数以及最终构建的评论树数量，同时通过status字段跟踪当前导入任务的处理状态，便于用户追溯数据来源、了解预处理各环节的数据衰减情况并定位异常任务。导入任务表结构如表\ref{tab:import_task}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \bicaption{导入任务表}{Import Task Table}
   \label{tab:import_task}
@@ -179,7 +179,7 @@
 
 存储经预处理后的评论数据，是系统的核心数据表。每条记录对应一条评论，包含评论文本、发布时间、发布者信息及主体类型标注等原始字段，同时记录该评论在评论树中的结构信息：通过in\_reply\_to\_tweet\_id字段建立父子回复关系，通过root\_tweet\_id字段关联所属评论树的根推文，通过depth字段标记节点在树中的层级深度。此外，eligible\_for\_value\_eval字段标记该评论是否可用于传播价值评估（空文本节点标记为False）。评论数据表结构如表\ref{tab:comment}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \bicaption{评论数据表}{Comment Table}
   \label{tab:comment}
@@ -211,7 +211,7 @@
 
 存储特征提取阶段的输出，与comment表一一对应，供评估模块读取用于模型推理。每条记录包含三类特征：文本语义特征，即通过BGE编码器生成的768维稠密向量，以BLOB格式序列化存储；情感倾向特征，即通过情感分析模型输出的正面、中性、负面三类情感概率；外生上下文特征，包括从发布时间提取的小时与星期信息以及话题来源地区，用于捕获时间和地域维度的传播环境差异。评论特征表结构如表\ref{tab:comment_feature}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \bicaption{评论特征表}{Comment Feature Table}
   \label{tab:comment_feature}
@@ -236,7 +236,7 @@
 
 存储两个评估模块的推理输出，供对比分析和可视化模块读取。对于传播价值评估不可用的记录（空文本节点），传播价值评分字段存为NULL，仅传播延续预测模块的字段有效。评估结果表结构如表\ref{tab:eval_result}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \bicaption{评估结果表}{Evaluation Result Table}
   \label{tab:eval_result}
