@@ -1,0 +1,200 @@
+\chapter{相关技术与理论基础}
+
+\section{信息级联与评论树结构}
+
+本节介绍信息级联与社交媒体评论树结构的基本概念，为全文的任务定义与系统设计提供统一的概念基础。
+
+\subsection{信息级联的基本概念}
+
+信息级联（Information Cascade）是指信息在社会网络中从一个节点出发，通过节点间的转发、回复等交互行为逐级扩散的过程。Leskovec等人\cite{leskovec2007cascading}在产品推荐网络中对级联现象进行了早期系统性研究，揭示了级联规模服从重尾分布、绝大多数级联规模较小但少数级联可达到极大规模等关键特征。在社交媒体平台上，一条原始推文发布后，用户对其发表评论，评论又可能引发更多用户的回复，由此形成层层递进的级联结构。级联的规模、深度和持续时间是衡量信息传播影响力的核心指标。
+
+Goel等人\cite{goel2016structural}提出了"结构病毒性"（structural virality）的概念，将信息传播结构视为广播式传播（broadcast diffusion）与病毒式传播（viral diffusion）两种理想类型之间的连续谱：广播式传播以星形结构为典型，信息由单一来源直接触达大量受众，级联深度为1；病毒式传播以链式结构为典型，信息经多代人际传递逐级扩散，级联深度达到2及以上。Liang\cite{liang2018broadcast}基于该框架，以级联深度作为操作化判据分析Twitter上的信息扩散模式，验证了深层级联（多步传播）与浅层级联（单步广播）在传播行为上的显著差异。这一基于级联深度的广播-病毒式传播区分为本文提供了简洁而有效的分析判据。本文第三章以2跳增长（$\text{depth} \geq 2$）作为传播延续的判定标准，即借鉴该框架的核心思想。
+
+级联预测（Cascade Prediction）是信息传播研究中的重要任务方向，旨在基于级联的早期传播特征预测其后续的演化趋势。Zhou等人\cite{zhou2021survey}在综述中将级联预测系统性地划分为规模预测（预测最终参与节点数）、增长预测（预测是否会继续扩散）和结构预测（预测未来的传播路径）等子任务。其中，增长预测是级联分析的核心问题之一。Cheng等人\cite{cheng2014cascades}在Facebook照片转发级联上系统研究了该问题，提出以级联是否在观测窗口内达到当前规模的$k$倍作为增长判据，发现时序特征、结构特征与内容特征的组合能够有效预测级联的增长趋势。本文第五章聚焦于增长预测，具体预测讨论路径上的节点能否在时间窗口内实现2跳增长。
+
+\subsection{社交媒体评论树结构}
+
+社交媒体平台上的讨论以评论树（Comment Tree）的形式组织。评论树是一种有根有向树结构，形式化定义为 $\mathcal{T} = (V, E, r)$，其中 $V = \{v_0, v_1, \ldots, v_n\}$ 为节点集合，$v_0 = r$ 为根节点（原始推文），$E \subseteq V \times V$ 为有向边集合，$(v_i, v_j) \in E$ 表示节点 $v_j$ 是对节点 $v_i$ 的直接回复。每个节点 $v_i$ 携带一组属性，包括评论文本、发布时间、发布者信息和主体类型等。
+% TODO: 此处评论树/传播树概念需补充参考文献支撑
+
+在评论树中，从根节点到任意节点 $v_k$ 的有序节点序列 $P_k = [v_0, v_1, \ldots, v_k]$ 称为节点 $v_k$ 的路径（Path）。路径记录了从原始推文到当前评论的完整讨论脉络，其长度（即路径上的节点数）反映了讨论的深度。路径上相邻节点之间的回复关系构成有向边，每条边携带回复发生的时间差、交互方向等信息。
+
+在多主体共存环境下，评论树的节点由不同类型的主体（人类用户或AI代理）发布，路径上相邻节点间的交互因此呈现异构性。本文将路径上每条有向边 $(v_i, v_{i+1})$ 的交互类型定义为发布者主体类型的有序对 $(a_i, a_{i+1})$，其中 $a_i \in \{H, A\}$ 分别表示人类用户和AI代理，由此产生 H$\to$H、H$\to$A、A$\to$H、A$\to$A 四种交互类型。这一结构为第五章的交互类型编码提供了形式化基础。
+% TODO: 四种交互类型是本文的创新定义，不宜放在第二章"相关技术与理论基础"中
+
+\section{预训练语言模型与文本表示}
+
+本文的两个核心模型均以文本语义和情感倾向作为重要的输入特征，这些特征通过预训练语言模型提取。本节介绍相关模型的技术原理。
+
+\subsection{BERT与文本语义编码}
+
+BERT（Bidirectional Encoder Representations from Transformers）是Devlin等人\cite{devlin2019bert}提出的预训练语言模型，基于Transformer编码器架构，通过在大规模无标注文本上进行掩码语言建模（Masked Language Modeling, MLM）和下一句预测（Next Sentence Prediction, NSP）两个预训练任务，学习通用的上下文化文本表示。
+
+BERT的核心特点在于双向上下文建模：不同于传统的从左至右语言模型，BERT通过随机掩码输入token并预测被掩码的内容，使模型能够同时利用左右两侧的上下文信息。给定输入文本，BERT输出每个token的上下文化表示向量，其中特殊标记 {[CLS]} 对应的输出向量被广泛用作整个输入序列的聚合表示。
+
+本文使用BAAI/bge-base-en-v1.5模型进行文本语义编码。BGE（BAAI General Embedding）是智源研究院基于BERT架构开发的文本嵌入模型\cite{xiao2024cpack}，通过对比学习在大规模文本对数据上进行微调，专为文本嵌入任务优化。该模型将输入文本编码为768维稠密向量，向量间的余弦相似度反映文本的语义相似程度。在本文系统中，BGE编码器用于提取评论文本的语义特征，分别作为第四章模型的G2文本语义特征组和第五章模型的节点文本特征。
+
+\subsection{RoBERTa与情感分析}
+
+RoBERTa（Robustly Optimized BERT Pretraining Approach）是Liu等人\cite{liu2019roberta}在BERT基础上提出的优化预训练方案。RoBERTa保持了BERT的模型架构不变，但在预训练策略上进行了多项改进：移除下一句预测任务（仅保留MLM），采用动态掩码策略（每次训练时重新生成掩码模式），使用更大的批次和更长的训练步数，并在更大规模的语料上进行预训练。这些优化使RoBERTa在多项下游任务上取得了优于BERT的表现。
+
+情感分析（Sentiment Analysis）旨在从文本中识别和提取情感信息，判断文本表达的情感极性（正面、中性、负面）\cite{zhao2010sentiment}。社交媒体文本的情感分析面临特殊挑战：文本通常较短、包含非正式表达（缩写、表情符号、网络俚语等），且语境依赖性强\cite{chen2023emoji}。
+
+本文使用cardiffnlp/twitter-roberta-base-sentiment-latest模型进行情感分析。该模型基于RoBERTa架构，在约1.24亿条推文上进行领域自适应预训练，再在TweetEval情感分析基准\cite{barbieri2020tweeteval}上进行有监督微调。模型以评论文本为输入，输出三维概率向量 $(p_{\text{pos}}, p_{\text{neu}}, p_{\text{neg}})$，分别表示正面、中性和负面情感的概率，满足 $p_{\text{pos}} + p_{\text{neu}} + p_{\text{neg}} = 1$。该情感概率向量分别作为第四章模型的G3情感倾向特征组和第五章模型的节点情感特征，同时也被第六章多主体对比分析模块用于情感倾向维度的对比。
+
+\section{Transformer与自注意力机制}
+
+Transformer是Vaswani等人\cite{vaswani2017attention}提出的序列建模架构，以自注意力机制为核心，摒弃了传统循环结构对序列的逐步处理方式，实现了全局并行的特征交互。本文第四章的Group-aware Fusion TabTransformer以Transformer编码器作为核心组件，第五章在序列编码器选型中也将Transformer作为对比方案。本节介绍Transformer编码器的核心机制。
+
+\subsection{缩放点积注意力}
+
+注意力机制的核心思想是根据查询（Query）与键（Key）的相关性对值（Value）进行加权聚合。给定查询矩阵 $Q \in \mathbb{R}^{n \times d_k}$、键矩阵 $K \in \mathbb{R}^{m \times d_k}$ 和值矩阵 $V \in \mathbb{R}^{m \times d_v}$，缩放点积注意力的计算过程为：
+
+\begin{equation}
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+\end{equation}
+
+其中 $QK^\top \in \mathbb{R}^{n \times m}$ 计算查询与键之间的点积相似度，缩放因子 $\sqrt{d_k}$ 用于防止点积值过大导致softmax函数进入梯度饱和区域。softmax归一化将相似度转化为注意力权重分布，确保权重非负且对每个查询求和为1。最终输出为值向量的加权和，权重由查询与键的语义相关性决定。
+
+在自注意力（Self-Attention）的设置下，查询、键和值均来自同一输入序列 $X \in \mathbb{R}^{n \times d_{\text{model}}}$，通过可学习的投影矩阵 $W^Q, W^K \in \mathbb{R}^{d_{\text{model}} \times d_k}$ 和 $W^V \in \mathbb{R}^{d_{\text{model}} \times d_v}$ 分别映射得到：$Q = XW^Q$，$K = XW^K$，$V = XW^V$。自注意力使序列中的每个位置都能直接关注所有其他位置，有效捕捉全局依赖关系。
+
+\subsection{多头注意力机制}
+
+单个注意力函数在统一的表示子空间中计算相关性，可能不足以捕捉不同类型的依赖关系。多头注意力（Multi-Head Attention）通过在多个并行子空间中独立执行注意力计算来增强模型的表达能力：
+
+\begin{align}
+\text{MultiHead}(Q, K, V) &= \text{Concat}(\text{head}_1, \ldots, \text{head}_h)W^O \\
+\text{head}_i &= \text{Attention}(QW_i^Q, KW_i^K, VW_i^V)
+\end{align}
+
+其中 $h$ 为注意力头数，$W_i^Q, W_i^K \in \mathbb{R}^{d_{\text{model}} \times d_k}$，$W_i^V \in \mathbb{R}^{d_{\text{model}} \times d_v}$，$W^O \in \mathbb{R}^{hd_v \times d_{\text{model}}}$，通常取 $d_k = d_v = d_{\text{model}} / h$。每个注意力头在不同的投影子空间中捕捉特定的交互模式，拼接后通过线性变换融合为最终输出。
+
+\subsection{Transformer编码器}
+
+Transformer编码器由 $L$ 层相同结构的编码层堆叠而成，每层包含多头自注意力子层和前馈网络（Feed-Forward Network, FFN）子层，二者均配合残差连接（Residual Connection）\cite{he2016deep}与层归一化（Layer Normalization）\cite{ba2016layer}。
+
+本文采用Pre-LayerNorm结构\cite{xiong2020layer}，即在每个子层的输入端施加层归一化：
+
+\begin{align}
+\mathbf{S}' &= \mathbf{S} + \text{MHA}(\text{LN}(\mathbf{S})) \\
+\mathbf{S}'' &= \mathbf{S}' + \text{FFN}(\text{LN}(\mathbf{S}'))
+\end{align}
+
+其中 $\text{LN}(\cdot)$ 为层归一化，$\text{MHA}(\cdot)$ 为多头自注意力，$\text{FFN}(\cdot)$ 为两层前馈网络。前馈网络的结构为：
+
+\begin{equation}
+\text{FFN}(x) = W_2 \cdot \text{GELU}(W_1 x + b_1) + b_2
+\end{equation}
+
+其中隐藏层维度通常为 $4 \times d_{\text{model}}$，GELU为激活函数。Pre-LayerNorm相较于原始Transformer的Post-LayerNorm结构，在训练稳定性上更具优势，尤其适用于深层网络。
+
+残差连接使每一层的输出可以直接包含输入信息，缓解深层网络的梯度消失问题；层归一化对每个样本的特征维度进行标准化，稳定训练过程中的数值分布。
+
+Transformer编码器的位置编码（Positional Encoding）用于向模型注入序列的位置信息。原始Transformer采用正弦-余弦函数生成固定的位置编码，对序列中每个位置 $pos$ 和编码维度 $i$ 计算：
+
+\begin{align}
+PE_{(pos, 2i)} &= \sin(pos / 10000^{2i/d_{\text{model}}}) \\
+PE_{(pos, 2i+1)} &= \cos(pos / 10000^{2i/d_{\text{model}}})
+\end{align}
+
+位置编码与token嵌入相加后输入编码器。需要注意的是，在本文第四章的TabTransformer应用场景中，输入为无序的特征组token集合而非自然语言序列，因此不使用位置编码；第五章的路径序列建模通过LSTM的递归结构隐式捕捉位置信息。
+
+\section{深度表格学习方法}
+
+本文第四章的评论传播价值评估任务将评论的多组异构特征组织为表格形式输入模型。本节介绍深度表格学习方法的技术背景，重点阐述本文涉及的TabTransformer和AutoInt两种方法。
+
+\subsection{表格数据建模的特点}
+
+表格数据（Tabular Data）是结构化数据的最常见形式，每行表示一个样本，每列对应一个特征。表格数据的建模面临以下特点：一是特征的异构性，同一表中常包含类别型特征（如地区、星期几）和连续型特征（如嵌入向量、概率值），不同类型的特征需要不同的处理方式；二是特征间的交互关系，某些特征的组合可能比单独特征包含更丰富的预测信息，如评论的发布时间与地区的组合可能反映特定区域的用户活跃模式。
+
+传统机器学习方法在表格数据任务中表现优异。以XGBoost\cite{chen2016xgboost}为代表的梯度提升决策树（GBDT）方法通过逐层分裂自然地处理异构特征并捕捉非线性交互，在许多基准测试中仍具有强竞争力\cite{grinsztajn2022tree}。深度学习方法在表格数据上的优势主要体现在两个方面\cite{gorishniy2021revisiting}：其一，通过嵌入层将高基数类别特征映射为低维稠密表示，避免独热编码带来的维度爆炸；其二，通过注意力机制或深层网络自动学习高阶特征交互，减少手工特征工程的需求。
+
+\subsection{TabTransformer}
+
+TabTransformer是Huang等人\cite{huang2020tabtransformer}提出的深度表格学习模型，核心思想是利用Transformer编码器对类别型特征进行上下文化表示学习。模型的处理流程如下：
+
+首先，对每个类别型特征通过可学习的嵌入层（Embedding Layer）映射为 $d_{\text{model}}$ 维的稠密向量，生成一组类别特征token。连续型特征则经过列级的层归一化处理。
+
+然后，将类别特征token组成的序列输入Transformer编码器。在自注意力机制下，每个类别特征token可以关注并融合其他类别特征的信息，输出上下文化的类别特征表示。
+
+最后，将Transformer编码器输出的上下文化类别特征表示与归一化后的连续型特征拼接，输入多层感知机分类头进行预测。
+
+TabTransformer的优势在于通过Transformer编码器自动学习类别特征之间的高阶交互关系，无需手工设计特征交叉。其局限在于连续型特征未参与Transformer层的深层交互，仅在最终拼接阶段与类别特征融合，可能限制了对异构特征间复杂依赖的建模能力。
+
+本文第四章在TabTransformer的基础上进行改进：将所有特征（包括连续型特征）按语义分组后统一投影为组token参与Transformer编码，并引入门控融合机制实现样本级的自适应特征组权重分配。
+
+\subsection{AutoInt}
+
+AutoInt（Automatic Feature Interaction Learning）是Song等人\cite{song2019autoint}提出的自动特征交互学习模型。与TabTransformer将Transformer编码仅限于类别特征不同，AutoInt对所有特征统一进行嵌入编码后，通过多层多头自注意力网络显式建模特征间的高阶交互。
+
+具体而言，AutoInt首先将每个特征（无论类别型还是连续型）通过嵌入层映射为 $d$ 维向量，然后将所有特征嵌入组成序列，输入多层自注意力网络。每一层中，每个特征的表示通过关注其他所有特征来更新自身，从而捕捉二阶及更高阶的特征交互。最终，所有特征的表示拼接后经过线性变换输出预测结果。
+
+AutoInt的优势在于能够显式建模所有特征之间的交互关系，且注意力权重提供了一定的可解释性。AutoInt在本文第四章中作为基线模型之一，与TabTransformer共同构成深度注意力方法的对比基准。
+
+\section{循环神经网络与序列建模}
+
+本文第五章的传播延续预测任务需要对评论树中从根节点到目标节点的路径序列进行建模。本节介绍循环神经网络及其变体，为第五章IHPE模型的序列编码层选型提供技术基础。
+
+\subsection{循环神经网络}
+
+循环神经网络（Recurrent Neural Network, RNN）是一类专为序列数据设计的神经网络架构\cite{elman1990finding}。与前馈网络不同，RNN在处理序列的每个时间步时维护一个隐状态（Hidden State），将前序信息传递至后续计算。对于输入序列 $\{x_1, x_2, \ldots, x_T\}$，标准RNN在每个时间步 $t$ 的更新规则为：
+
+\begin{equation}
+h_t = \tanh(W_{hh} h_{t-1} + W_{xh} x_t + b_h)
+\end{equation}
+
+其中 $h_t \in \mathbb{R}^d$ 为时间步 $t$ 的隐状态，$W_{hh}$ 和 $W_{xh}$ 为权重矩阵，$\tanh$ 为激活函数。隐状态 $h_t$ 编码了从序列起始到当前时间步的累积信息。
+
+标准RNN面临梯度消失与梯度爆炸问题\cite{bengio1994learning}：在反向传播过程中，梯度信号需要经过多个时间步的连乘传递，当序列较长时，梯度可能指数级衰减或增长，导致模型难以学习长程依赖关系。
+
+\subsection{长短期记忆网络}
+
+长短期记忆网络（Long Short-Term Memory, LSTM）是Hochreiter和Schmidhuber\cite{hochreiter1997long}提出的RNN变体，通过门控机制有效缓解了梯度消失问题。LSTM引入了细胞状态（Cell State）$c_t$ 作为信息的长程传输通道，并通过三个门控单元控制信息的流入、保留与输出。
+
+LSTM在每个时间步 $t$ 的计算过程涉及三个门控单元的协同运作。首先，遗忘门根据前一时间步隐状态 $h_{t-1}$ 与当前输入 $x_t$ 计算门控信号，决定从细胞状态中丢弃哪些历史信息：
+
+\begin{equation}
+f_t = \sigma(W_f [h_{t-1}; x_t] + b_f)
+\end{equation}
+
+然后，输入门计算门控信号与候选细胞状态，决定将哪些新信息写入细胞状态：
+
+\begin{equation}
+i_t = \sigma(W_i [h_{t-1}; x_t] + b_i), \quad \tilde{c}_t = \tanh(W_c [h_{t-1}; x_t] + b_c)
+\end{equation}
+
+在此基础上，细胞状态通过加法结构完成更新，遗忘门对历史信息进行选择性保留，输入门对新信息进行选择性写入：
+
+\begin{equation}
+c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
+\end{equation}
+
+最后，输出门从更新后的细胞状态中选择性输出当前时间步的隐状态：
+
+\begin{equation}
+o_t = \sigma(W_o [h_{t-1}; x_t] + b_o), \quad h_t = o_t \odot \tanh(c_t)
+\end{equation}
+
+其中 $\sigma(\cdot)$ 为Sigmoid激活函数，$\odot$ 为逐元素乘法，$[h_{t-1}; x_t]$ 表示前一时间步隐状态与当前输入的拼接。
+
+LSTM的关键设计在于细胞状态 $c_t$ 的更新采用加法结构而非标准RNN的乘法结构，使梯度能够沿细胞状态通道长程传播而不易衰减。三个门控单元协同实现了对信息流的精细控制。
+
+在本文第五章中，IHPE模型选用单向LSTM作为序列编码器，以路径从根节点到当前节点的方向为时间步顺序，捕捉讨论路径上的传播上下文依赖。
+
+\subsection{双向LSTM}
+
+双向LSTM（Bidirectional LSTM, Bi-LSTM）由Graves和Schmidhuber\cite{graves2005framewise}提出，通过同时运行前向和后向两个LSTM来捕捉序列的双向上下文信息：
+
+\begin{align}
+\overrightarrow{h}_t &= \text{LSTM}_{\text{forward}}(x_t, \overrightarrow{h}_{t-1}) \\
+\overleftarrow{h}_t &= \text{LSTM}_{\text{backward}}(x_t, \overleftarrow{h}_{t+1}) \\
+h_t &= [\overrightarrow{h}_t; \overleftarrow{h}_t]
+\end{align}
+
+前向LSTM按时间正序处理序列，后向LSTM按时间逆序处理序列，每个时间步的最终表示为前向和后向隐状态的拼接，因此Bi-LSTM的输出维度为单向LSTM的两倍。
+
+Bi-LSTM在自然语言处理的许多任务（如命名实体识别\cite{lample2016neural}、序列标注\cite{huang2015bidirectional}）中表现优异，因为这些任务需要同时利用上下文两个方向的信息。然而在本文第五章的路径传播预测场景中，路径具有天然的方向性（从根节点到当前节点），后向信息（从子节点到祖先节点）对预测当前节点的传播延续意义有限，且双向结构使参数量翻倍。第五章的消融实验验证了在该场景下单向LSTM优于Bi-LSTM。
+
+\section{本章小结}
+
+本章介绍了本文涉及的相关技术与理论基础，包括信息级联与评论树结构的基本概念、基于BERT和RoBERTa的文本语义编码与情感分析方法、Transformer编码器的自注意力机制、TabTransformer与AutoInt等深度表格学习方法，以及LSTM与Bi-LSTM等序列建模方法。上述技术构成了本文系统设计与模型实现的技术基础。
