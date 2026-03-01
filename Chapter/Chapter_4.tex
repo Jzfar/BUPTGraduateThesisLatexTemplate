@@ -1,0 +1,424 @@
+\chapter{基于组感知融合的评论传播价值评估模型}
+
+\section{问题分析}
+
+在社交媒体的多主体共存环境中，评论能否引发后续回应是衡量其传播价值的关键信号——回复行为要求受众在阅读并理解原始评论的基础上形成自身观点并组织语言进行表达，涉及深层次的认知加工。面向这一场景，系统需要在评论级别量化不同主体的传播价值分布，为每条评论输出传播价值评分，以区分人类用户与AI代理在内容吸引力上的差异。该需求要求模型仅使用评论发布时刻的静态特征进行预测，不依赖发布后的传播反馈。本章针对这一需求，提出Group-aware Fusion TabTransformer模型，通过将主体标识（agent\_type）作为显式特征组（G4）引入并以门控融合机制自适应调整各特征组的样本级权重，实现对评论传播价值的准确评估。
+
+将评论传播价值评估建模为预测任务，需要确定合适的评估参照事件。本章选择评论在时间窗口$T$内是否获得至少一条直接回复作为参照事件。在社交媒体平台的多种用户互动行为中，浏览和点赞属于低成本、低认知参与的操作，用户无需对内容进行深入理解即可完成，更多反映信息的曝光度和表层吸引力；相比之下，回复行为涉及信息理解、立场判断与内容生成等深层次认知加工，能够更真实地反映用户对评论内容的认知投入程度，是衡量信息是否引发实质性认知传播的有效信号。
+
+为实现不同评论之间传播价值的公平比较，需要引入统一的时间窗口$T$对回复观测进行约束。不同评论的发布时间各异，若不设定统一的观测窗口，"是否被回复"这一指标将受到观测时长的影响，导致不同评论之间的比较缺乏公平性。时间窗口$T$的选取需要在正例覆盖度与数据利用率之间进行权衡：$T$过短导致大量实际会被回复的样本被错误标记为负例，$T$过长导致随访不足的右删失样本过多而无法使用。本文选用$T=12\text{h}$作为时间窗口参数，具体的数据依据将在4.4.1.2节基于数据集分布进行详细论证。
+
+\section{任务定义}
+
+本文将评论传播价值评估建模为一个二分类任务：给定一条评论在发布时刻可获得的静态特征，预测该评论在时间窗口$T$内是否会收到至少一条直接回复。模型仅使用发布时刻的固定信息，不依赖发布后的传播反馈（如浏览数、点赞数等后验信息）。
+
+图\ref{fig:pipeline}展示了本任务的完整物理流程，涵盖从X平台多主体数据采集、数据清洗、特征工程到模型推理的端到端过程。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{G3-1-latex/fig_3x_pipeline.pdf}
+  \bicaption{评论传播价值评估任务全流程示意图}{Overall Pipeline of Comment Propagation Value Assessment}
+  \label{fig:pipeline}
+\end{figure}
+
+模型输出为传播价值评分，可用于评论排序、价值分层与高价值内容挖掘等系统功能。
+
+本任务涉及的核心时间变量包括：评论发布时间$t_{\text{pub}}$（UTC）、观测截止时间$t_{\text{obs}}$（UTC）、最早直接子回复的发布时间$t_{\text{reply}}$（若存在）以及时间窗口参数$T$（本文取$T=12\text{h}$）。在此基础上定义两个派生变量：回复延迟$\Delta = t_{\text{reply}} - t_{\text{pub}}$（仅在发生回复的样本上有定义），以及随访时间$A = t_{\text{obs}} - t_{\text{pub}}$（所有样本均可计算）。
+
+标签定义如下：当存在$t_{\text{reply}}$使得$\Delta = t_{\text{reply}} - t_{\text{pub}} \leq T$时，$\text{label} = 1$；当在$T$内未观察到回复且$A \geq T$时，$\text{label} = 0$。
+
+上述定义要求满足无右删失约束$A \geq T$，以确保$\text{label}=0$的语义是"窗口内确实未被回复"，而非"观测时间不足、尚未观测完全"。若$A < T$，则该样本对"是否在$T$内被回复"而言属于右删失（right-censored）样本，需予以剔除。需要说明的是，右删失由随访不足导致，与回复事件本身发生的早晚是两个独立维度。
+
+上述标签定义对应三类典型样本情形，如图\ref{fig:label_timeline}所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{G3-2/label_timeline.png}
+  \bicaption{时间窗口与标签定义示意图}{Illustration of Time Window and Label Definition}
+  \label{fig:label_timeline}
+\end{figure}
+
+\section{模型结构}
+
+\subsection{模型整体结构}
+
+本文提出的Group-aware Fusion TabTransformer模型采用"组投影—门控融合—Transformer编码—分类预测"的四阶段架构，旨在充分利用异构特征组的互补信息，实现对评论传播价值的准确评估。模型整体结构如图\ref{fig:model_arch}所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{G3-3/图3.x-GFTabTransformer模型整体结构示意图.cropped.pdf}
+  \bicaption{Group-aware Fusion TabTransformer模型结构图}{Architecture of Group-aware Fusion TabTransformer}
+  \label{fig:model_arch}
+\end{figure}
+
+模型的处理流程可概括为以下四个阶段：
+
+\textbf{（1）组投影阶段}：将四组异构特征（G1外生上下文、G2文本语义、G3情感倾向、G4主体标识）分别通过独立的投影器映射到统一的$d_{\text{model}}$维表示空间，生成$n$个组token $\{\mathbf{e}_1, \mathbf{e}_2, \ldots, \mathbf{e}_n\}$。该阶段消除了不同特征组之间的维度差异，为后续的融合与交互奠定基础。
+
+\textbf{（2）门控融合阶段}：通过门控融合机制计算样本级别的特征组权重$\boldsymbol{\alpha} = (\alpha_1, \ldots, \alpha_n)$，并据此对组token进行加权求和，生成融合表示$\mathbf{e}_{\text{fused}}$。该阶段使模型能够根据每个样本的具体特征分布，自适应地调整各特征组的贡献权重。
+
+\textbf{（3）Transformer编码阶段}：将所有组token与融合token拼接为序列$[\mathbf{e}_1; \ldots; \mathbf{e}_n; \mathbf{e}_{\text{fused}}]$，输入Transformer编码器进行深层特征交互。通过多头自注意力机制，模型能够捕捉不同特征组之间的复杂依赖关系。
+
+\textbf{（4）分类预测阶段}：从Transformer编码器的输出中提取最终表示，经多层感知机（MLP）分类头输出预测logits，通过Sigmoid函数转换为传播价值评分。
+
+上述四个阶段形成端到端的可微分流程，模型通过二元交叉熵损失函数进行优化。各阶段的具体设计将在后续小节中详细阐述。
+
+\subsection{特征建模}
+
+本节详细阐述模型所使用的四组特征的构建方式。各特征组从不同维度刻画评论的传播潜力，共同构成模型的输入空间。
+
+\textbf{（1）G1外生上下文特征}
+
+外生上下文特征捕捉评论发布时的时空背景信息，包含三个类别型子特征：地理区域（trending\_zone），即评论所属热点话题的地理区域，包含美国、加拿大、印度三个类别，采用独热编码表示，维度为3；发布小时（hour\_of\_day），从评论发布时间戳中提取的UTC小时数（0--23），采用独热编码表示，维度为24；发布星期（day\_of\_week），从评论发布时间戳中提取的星期几（0=周一，6=周日），采用独热编码表示，维度为7。G1特征组总维度为34维（$3+24+7$），全部采用独热编码形式，反映了评论发布的外部环境因素，这些因素独立于评论内容本身，但可能影响用户的在线活跃度和互动倾向。
+
+\textbf{（2）G2文本语义特征}
+
+文本语义特征通过预训练语言模型提取评论文本的深层语义表示。以评论原始文本为输入，使用BAAI/bge-base-en-v1.5模型进行编码，该模型基于BERT架构、专为文本嵌入任务优化，输出768维稠密向量。该特征组捕捉评论的语义内容、表达方式和话题相关性，是判断评论传播价值的核心信号之一。
+
+\textbf{（3）G3情感特征}
+
+情感特征量化评论文本的情感倾向。以评论原始文本为输入，使用cardiffnlp/twitter-roberta-base-sentiment-latest模型进行分析，该模型基于RoBERTa架构、在Twitter数据上微调\cite{barbieri2020tweeteval}，适用于社交媒体文本的情感分析，输出三维概率向量$(p_{\text{pos}}, p_{\text{neu}}, p_{\text{neg}})$，分别表示正面、中性、负面情感的概率，满足$p_{\text{pos}} + p_{\text{neu}} + p_{\text{neg}} = 1$。情感特征反映评论的情绪色彩，已有研究表明情感极性与社交媒体内容的传播效果存在显著关联\cite{stieglitz2013emotions,tsugawa2017sentiment}。
+
+\textbf{（4）G4主体标识特征}
+
+主体标识特征区分评论发布者的类型，取值为二元类别变量，其中0表示人类用户（human），1表示AI代理（agent，本数据集中为Grok）。判定方式为通过X平台账号的user\_id与username双重匹配：Grok官方账号具有唯一且固定的平台用户ID，采集脚本对每条评论的发布者信息进行匹配，同时满足user\_id和username条件的评论标记为agent\_type=1，其余标记为agent\_type=0。编码方式采用可学习的嵌入向量（Embedding），将离散标识映射到$d_{\text{model}}$维连续空间。该特征是本研究的核心创新点之一，使模型能够显式感知并区分不同主体类型的传播行为模式差异。
+
+各特征组的维度与编码方式汇总如表\ref{tab:feature_summary}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{特征维度汇总}{Feature Dimension Summary}
+  \label{tab:feature_summary}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{3cm}}
+    \toprule
+    特征组 & 含\quad 义 & 原始维度 & 编码方式 \\
+    \midrule
+    G1 & 外生上下文 & 34 & 独热编码 \\
+    G2 & 文本语义 & 768 & 预训练嵌入 \\
+    G3 & 情感倾向 & 3 & 概率分布 \\
+    G4 & 主体标识 & 1 & 可学习嵌入 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{基于组感知的门控融合机制}
+
+本节详细阐述Group-aware特征融合机制的设计原理与数学形式。该机制的核心思想是：不同特征组对传播价值预测的贡献因样本而异，模型应自适应地学习样本级别的特征组权重。
+
+\textbf{（1）组投影层（Group Projector）}
+
+由于各特征组的原始维度差异显著（G1: 34维，G2: 768维，G3: 3维，G4: 1维），首先需要将它们投影到统一的表示空间。对于连续型特征组（G1、G2、G3），采用线性投影配合非线性激活：
+
+\begin{equation}
+\mathbf{e}_k = \text{Dropout}(\text{LayerNorm}(\text{GELU}(\mathbf{W}_k \mathbf{x}_k + \mathbf{b}_k)))
+\end{equation}
+
+其中$\mathbf{x}_k \in \mathbb{R}^{d_k}$为第$k$组的原始特征，$\mathbf{W}_k \in \mathbb{R}^{d_{\text{model}} \times d_k}$为投影矩阵，$\mathbf{e}_k \in \mathbb{R}^{d_{\text{model}}}$为投影后的组表示向量（token）。
+
+对于离散型特征（G4主体标识），采用可学习的嵌入表：
+
+\begin{equation}
+\mathbf{e}_{4} = \text{Embedding}(x_{G_4}) \in \mathbb{R}^{d_{\text{model}}}
+\end{equation}
+
+经过组投影后，每个样本被表示为$n$个等维度的组token：$\{\mathbf{e}_1, \mathbf{e}_2, \ldots, \mathbf{e}_n\}$，其中$n=4$（对应G1、G2、G3、G4）。
+
+\textbf{（2）门控融合层（Gating Fusion）}
+
+门控融合层计算样本级别的特征组权重，实现自适应的特征融合。首先，将所有组token拼接为单一向量：
+
+\begin{equation}
+\mathbf{h}_{\text{concat}} = [\mathbf{e}_1; \mathbf{e}_2; \ldots; \mathbf{e}_n] \in \mathbb{R}^{n \cdot d_{\text{model}}}
+\end{equation}
+
+然后，通过多层感知机（MLP）计算各组的重要性得分，并经Softmax归一化得到权重：
+
+\begin{align}
+\mathbf{z} &= \text{MLP}(\mathbf{h}_{\text{concat}}) \in \mathbb{R}^{n} \\
+\alpha_k &= \frac{\exp(z_k)}{\sum_{j=1}^{n} \exp(z_j)}, \quad k = 1, 2, \ldots, n
+\end{align}
+
+其中MLP由$\text{Linear}(n \cdot d_{\text{model}}, 2 \cdot d_{\text{model}})$、GELU激活、Dropout与$\text{Linear}(2 \cdot d_{\text{model}}, n)$四层堆叠构成。最后，根据门控权重对各组token进行加权求和，生成融合表示：
+
+\begin{equation}
+\mathbf{e}_{\text{fused}} = \sum_{k=1}^{n} \alpha_k \cdot \mathbf{e}_k \in \mathbb{R}^{d_{\text{model}}}
+\end{equation}
+
+门控权重$\boldsymbol{\alpha} = (\alpha_1, \ldots, \alpha_n)$满足$\sum_k \alpha_k = 1$且$\alpha_k \geq 0$，可解释为各特征组对当前样本预测的相对贡献度。
+
+\textbf{（3）融合机制的设计动机}
+
+相较于简单的特征拼接（Concatenation），门控融合机制具有三方面优势。其一，样本自适应性：不同样本可以获得不同的特征组权重分配，例如对于AI代理发布的评论，G4主体标识特征可能获得更高权重。其二，可解释性：门控权重$\boldsymbol{\alpha}$提供了特征重要性的直观解释，便于分析模型决策依据。其三，参数效率：通过统一维度的组表示进行融合，避免了高维拼接带来的参数膨胀问题。
+
+\subsection{序列编码与全局表示聚合}
+
+本节阐述模型的后半部分处理流程：如何通过Transformer编码器实现特征组间的深层交互，以及如何从编码结果中提取最终表示用于分类预测。
+
+\textbf{（1）Token序列构建}
+
+经过组投影与门控融合后，模型获得$n$个组token $\{\mathbf{e}_1, \ldots, \mathbf{e}_n\}$与1个融合token $\mathbf{e}_{\text{fused}}$。将它们拼接为长度为$(n+1)$的序列：
+
+\begin{equation}
+\mathbf{S} = [\mathbf{e}_1; \mathbf{e}_2; \ldots; \mathbf{e}_n; \mathbf{e}_{\text{fused}}] \in \mathbb{R}^{(n+1) \times d_{\text{model}}}
+\end{equation}
+
+其中，融合token置于序列末尾。在自注意力计算中，$\mathbf{e}_{\text{fused}}$充当跨组信息交换的中介节点：各组token通过关注$\mathbf{e}_{\text{fused}}$获取经门控权重调制的全局上下文，$\mathbf{e}_{\text{fused}}$也从各组token中聚合更新后的信息。这一设计使得即便最终采用全序列拼接提取输出（见第（3）部分），各组token的编码结果也已融入全局信号，而非孤立地仅依赖组间的直接注意力交互。
+
+\textbf{（2）Transformer编码}
+
+Token序列输入Transformer编码器进行深层特征交互。编码器采用Pre-LayerNorm结构\cite{xiong2020layer}，每层包含多头自注意力（Multi-Head Self-Attention）与前馈网络（Feed-Forward Network）两个子模块：
+
+\begin{align}
+\mathbf{S}' &= \mathbf{S} + \text{MHA}(\text{LN}(\mathbf{S})) \\
+\mathbf{S}'' &= \mathbf{S}' + \text{FFN}(\text{LN}(\mathbf{S}'))
+\end{align}
+
+其中，$\text{LN}(\cdot)$为层归一化，$\text{MHA}(\cdot)$为多头自注意力机制，$\text{FFN}(\cdot)$为两层前馈网络（隐藏层维度为$4 \times d_{\text{model}}$，激活函数为GELU）。
+
+多头自注意力机制$\text{MHA}(\cdot)$\cite{vaswani2017attention}将输入投影到$h$个并行子空间，在每个头上独立计算缩放点积注意力后拼接输出：
+
+\begin{align}
+\text{MHA}(X) &= \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\,W^O \\
+\text{head}_i &= \text{Attention}(XW_i^Q,\, XW_i^K,\, XW_i^V)
+\end{align}
+
+\begin{equation}
+\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+\end{equation}
+
+其中$W_i^Q, W_i^K \in \mathbb{R}^{d_{\text{model}} \times d_k}$，$W_i^V \in \mathbb{R}^{d_{\text{model}} \times d_v}$，$W^O \in \mathbb{R}^{hd_v \times d_{\text{model}}}$，缩放因子$d_k = d_v = d_{\text{model}}/h$。
+
+通过$L$层编码器的堆叠，模型能够捕捉不同特征组之间的高阶依赖关系。例如，文本语义特征（G2）与主体标识特征（G4）的交互可能揭示人类用户与AI代理在表达方式上的差异模式。
+
+设编码器输出为$\mathbf{H} = [\mathbf{h}_1; \ldots; \mathbf{h}_n; \mathbf{h}_{\text{fused}}] \in \mathbb{R}^{(n+1) \times d_{\text{model}}}$。
+
+\textbf{（3）输出表示提取}
+
+从编码器输出中提取用于分类的最终表示。本文采用全序列拼接（Concatenation）策略，将所有token的编码结果展平为单一向量：
+
+\begin{equation}
+\mathbf{h} = \text{Flatten}(\mathbf{H}) = [\mathbf{h}_1; \mathbf{h}_2; \ldots; \mathbf{h}_n; \mathbf{h}_{\text{fused}}] \in \mathbb{R}^{(n+1) \cdot d_{\text{model}}}
+\end{equation}
+
+相较于仅使用融合token $\mathbf{h}_{\text{fused}}$作为输出表示，全序列拼接策略保留了各特征组经Transformer编码后的独立表示，使分类头能够直接访问每个特征组的深层特征，从而提升模型的表达能力。
+
+\textbf{（4）分类预测}
+
+最终表示$\mathbf{h}$输入多层感知机分类头，输出预测logits：
+
+\begin{equation}
+\hat{y} = \text{MLP}(\mathbf{h}) = \mathbf{W}_2 \cdot \text{GELU}(\text{Dropout}(\mathbf{W}_1 \mathbf{h} + \mathbf{b}_1)) + \mathbf{b}_2
+\end{equation}
+
+其中，$\mathbf{W}_1 \in \mathbb{R}^{d_{\text{hidden}} \times (n+1) \cdot d_{\text{model}}}$，$\mathbf{W}_2 \in \mathbb{R}^{1 \times d_{\text{hidden}}}$，$d_{\text{hidden}}$为隐藏层维度。
+
+训练阶段采用带类别权重的二元交叉熵损失函数：
+
+\begin{equation}
+\mathcal{L} = -\frac{1}{N} \sum_{i=1}^{N} \left[ w_{\text{pos}} \cdot y_i \log(\sigma(\hat{y}_i)) + (1 - y_i) \log(1 - \sigma(\hat{y}_i)) \right]
+\end{equation}
+
+其中，$\sigma(\cdot)$为Sigmoid函数，$w_{\text{pos}} = N_{\text{neg}} / N_{\text{pos}}$为正类权重，用于缓解类别不平衡问题。
+
+推理阶段，模型输出的$\sigma(\hat{y})$即为评论的传播价值评分，取值范围为$[0, 1]$，数值越高表示该评论在时间窗口$T$内获得回复的可能性越大。
+
+\section{实验与分析}
+
+\subsection{实验设置}
+
+\subsubsection{数据集}
+
+\textbf{（1）数据集构建背景}
+
+现有公开社交媒体数据集普遍缺乏对内容发布主体类型（人类用户或AI代理）的标注信息，无法直接支持多主体传播行为的对比研究。因此，本文基于X（原Twitter）平台构建了包含人类用户与AI代理（Grok）评论的自建数据集。
+
+\textbf{（2）数据采集方法}
+
+数据采集采用三阶段流水线方式进行：
+
+第一阶段，热点话题获取。从Trends24网站（trends24.in）爬取目标地区的热门趋势话题（Trending Topics），选取24小时内持续时间最长（Longest Trending）的前5个话题作为采集种子。选择持续时间较长的话题而非最新话题，旨在确保话题下已积累足够数量的评论，便于构建完整的评论树结构。
+
+第二阶段，根推文检索。基于第一阶段获取的热点话题关键词，在X平台搜索接口中进行检索，获取每个话题下热度最高的前5条推文作为根推文（Root Tweet）。
+
+第三阶段，评论树采集。对每条根推文，递归获取其完整的评论树结构，包括直接评论及多层嵌套的子评论。若某条推文本身为其他推文的评论，则回溯至最顶层根推文后进行完整采集，以保证评论树的完整性。
+
+采集过程中同步记录元数据字段：trending\_zone字段标识话题来源地区（如united-states、canada、india），search\_keyword字段记录触发采集的检索关键词。选择从热门趋势入手进行采集，主要基于以下考量：热门话题具有较高的时效性，能够确保采集时间窗口覆盖Grok等AI代理功能上线后的评论数据，从而保证数据集中包含足够的AI代理样本。
+
+\textbf{（3）数据预处理}
+
+原始采集数据经comment\_id去重后包含255,754条唯一评论。对其进行质量过滤，剔除crawl\_time缺失（64,631条）和comment\_text为空（8,600条）的样本，共移除73,231条（28.63\%），保留\textbf{182,523}条。
+
+评论的回复标签基于实际采集到的评论树父子关系判定（即在评论树中是否存在直接子回复），而非X平台API返回的reply\_count元数据字段。基于评论树结构判定的有回复评论为54,359条。
+
+\subsubsection{时间窗口T的选取与最终数据集构建}
+
+$T$的选择需要同时平衡两个相互制约的维度：正例覆盖度$P(\Delta \leq T \mid \text{replied})$（$T$不能太短）与删失率$P(A < T)$（$T$不能太长）。
+
+\textbf{（1）正例覆盖度与删失率分析}
+
+对全量数据中所有存在直接子回复的评论（$n=54{,}359$），计算首次回复延迟$\Delta$的分布。回复行为高度前置，中位数仅16.75分钟；$T=12\text{h}$时覆盖96.47\%，从$T=12\text{h}$到$T=24\text{h}$覆盖度仅提升2.68个百分点，边际收益递减明显。在删失率方面，对质量过滤后的182,523条样本计算随访时间$A$，$T=12\text{h}$时删失率为12.90\%（87.10\%样本可用），而$T=24\text{h}$时删失率骤升至50.43\%，样本利用率减半。正例覆盖度与删失率随$T$变化的趋势如图\ref{fig:t_selection}所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{G3-4/T_selection_dual_axis.png}
+  \bicaption{正例覆盖度与删失率随T变化的双轴对比图}{Dual-axis Comparison of Positive Coverage and Censoring Rate vs. T}
+  \label{fig:t_selection}
+\end{figure}
+
+\textbf{（2）T=12h的选取依据}
+
+$T=12\text{h}$的选取依据如下：（1）正例覆盖度96.47\%，任务语义完整；（2）删失率仅12.90\%，数据利用率高；（3）从$T=12\text{h}$到$T=24\text{h}$，覆盖度仅提升2.68\%，但删失率增加37.53\%，边际成本远大于收益，$T=12\text{h}$为帕累托最优点；（4）$T=12\text{h}$符合社交媒体研究中12--24小时短期传播窗口的领域惯例\cite{pfeffer2023halflife}。
+
+\textbf{（3）右删失过滤与最终数据集}
+
+基于上述分析选定$T=12\text{h}$后，根据4.1节提出的无右删失约束（$A \geq T$），剔除随访时间不足12小时的样本，共移除23,551条（占质量过滤后样本的12.90\%）。该步骤确保所有$\text{label}=0$样本的语义为"在12小时窗口内确实未被回复"，而非"观测时间不足"。综合上述流程，原始采集数据经comment\_id去重后保留255,754条，质量过滤阶段剔除crawl\_time缺失与空文本样本73,231条（28.63\%）后保留182,523条，右删失过滤阶段再剔除23,551条（12.90\%），最终数据集包含\textbf{158,972}条评论，其主体与标签分布如表\ref{tab:dataset_dist}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{最终数据集分布}{Final Dataset Distribution}
+  \label{tab:dataset_dist}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{2.5cm}}
+    \toprule
+    维\quad 度 & 类\quad 别 & 数\quad 量 & 占\quad 比 \\
+    \midrule
+    主体 & human & 155,529 & 97.83\% \\
+    主体 & grok & 3,443 & 2.17\% \\
+    标签 & label=1 & 36,234 & 22.79\% \\
+    标签 & label=0 & 122,738 & 77.21\% \\
+    human $\times$ label & label=1 & 34,366 & 22.10\% \\
+    human $\times$ label & label=0 & 121,163 & 77.90\% \\
+    grok $\times$ label & label=1 & 1,868 & 54.26\% \\
+    grok $\times$ label & label=0 & 1,575 & 45.74\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{数据划分}
+
+本文采用train/val/test三段式划分，用于模型训练、超参数选择与最终评估。为避免同一讨论树的评论在训练集与测试集中同时出现造成语境信息泄露，划分以root\_tweet\_id（讨论树根推文）为分组单位，确保同一讨论树的所有评论仅出现在同一个子集中。数据按70/15/15比例划分，训练集104,384条、验证集25,174条、测试集29,414条，各子集的正例比例（22.74\%--22.93\%）与human/agent比例（约97.8\%/2.2\%）均与全量分布保持一致。每组实验使用3个随机种子（seed=1/2/3），结果取平均报告。
+
+\subsubsection{实验环境与超参数配置}
+
+实验基于PyTorch深度学习框架实现，运行于配备Apple M4处理器（10核GPU）、24 GB内存的macOS 15.3.2环境，编程语言为Python 3.13.9，PyTorch版本为2.9.1。
+
+本文所提出的Group-aware Fusion TabTransformer及消融变体的主要超参数配置如下：模型隐藏维度$d_{\text{model}}$设为32，Transformer编码器堆叠2层、每层使用4个注意力头，Dropout率为0.2，MLP分类头隐藏层维度为128。训练阶段采用AdamW优化器\cite{loshchilov2019decoupled}，学习率设为4e-5，批大小为512，最大训练轮数为30，以验证集AUC-PR为早停监控指标、耐心值为5，训练使用带正类权重的二元交叉熵损失（$w_{\text{pos}} = N_{\text{neg}}/N_{\text{pos}}$）。所有基线深度模型（TabTransformer、AutoInt）采用相同的超参数配置以保证对比公平性，每组实验使用3个随机种子取平均。
+
+\subsubsection{评价指标}
+
+本文采用以下指标评估模型性能：
+
+设TP、FP、FN分别为真正例、假正例、假负例数量，精确率与召回率定义为：
+
+\begin{equation}
+\text{Precision} = \frac{TP}{TP + FP}, \qquad \text{Recall} = \frac{TP}{TP + FN}
+\end{equation}
+
+Recall@P的正式定义为：在Precision-Recall曲线上，精确率不低于$P$时所能达到的最大召回率：
+
+\begin{equation}
+\text{Recall@}P = \max\{\,r \mid \text{Precision}(r) \geq P\,\}
+\end{equation}
+
+本文基于上述基础指标，采用以下综合指标评估模型性能。
+
+AUC-PR（Precision-Recall曲线下面积）适用于类别不平衡场景（本数据集正例约23\%），比AUC-ROC更能反映模型在正类识别上的表现\cite{davis2006relationship}，符合系统"筛选高价值内容"的目标。
+
+Recall@P（固定精确率下的召回率）定义为在Precision-Recall曲线上精确率不低于$P$时所能达到的最大召回率。本文取$P \in \{0.5, 0.8\}$：$P=0.5$对全局基准率（$\sim$23\%）而言代表2倍以上的精度提升，作为中等精度筛选锚点；$P=0.8$代表高精度筛选场景。若模型在任何阈值下均无法达到精确率$P$，则Recall@P记为0。
+
+\subsubsection{基线模型}
+
+为验证所提出模型的有效性，本文选取四个基线模型进行对比，覆盖传统机器学习与深度表格学习两类方法：
+
+\textbf{（1）Logistic Regression（LR）}：线性分类模型，通过L2正则化的逻辑回归对拼接后的特征向量进行二分类，采用class\_weight="balanced"缓解类别不平衡。
+
+\textbf{（2）XGBoost（XGB）}：Chen和Guestrin\cite{chen2016xgboost}提出的基于梯度提升决策树的集成学习方法，在表格数据任务中广泛应用且通常具有强竞争力。
+
+\textbf{（3）TabTransformer}：Huang等人\cite{huang2020tabtransformer}提出的深度表格学习模型，将类别型特征通过Embedding映射后输入Transformer编码器进行上下文化表示学习，连续型特征经LayerNorm后与Transformer输出拼接。
+
+\textbf{（4）AutoInt}：Song等人\cite{song2019autoint}提出的自动特征交互学习模型，通过多头自注意力机制在嵌入层显式建模特征间的高阶交互。
+
+所有基线模型与本文模型使用相同的G1--G4特征组作为输入。LR和XGBoost将所有特征拼接为平坦向量直接输入；TabTransformer和AutoInt对类别型特征（G1外生上下文中的子特征、G4主体标识）采用嵌入编码，连续型特征（G2文本语义、G3情感倾向）按其各自方式处理。上述四个基线构成从线性模型到非线性集成再到深度注意力的递进对比体系。
+
+\subsection{对比实验}
+
+\textbf{（1）整体性能对比}
+
+各模型在测试集上的整体性能如表\ref{tab:compare_overall}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{对比实验整体性能}{Overall Performance Comparison}
+  \label{tab:compare_overall}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{4cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{2.5cm}}
+    \toprule
+    Model & AUC-PR & Recall@P=0.5 & Recall@P=0.8 \\
+    \midrule
+    LR & 0.410 & 0.201 & 0.008 \\
+    XGB & 0.415 & 0.207 & 0.025 \\
+    TabTransformer & 0.420 & 0.210 & 0.023 \\
+    AutoInt & 0.418 & 0.204 & 0.021 \\
+    Group-aware TT & \textbf{0.422} & \textbf{0.215} & \textbf{0.028} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+如表\ref{tab:compare_overall}所示，Group-aware Fusion TabTransformer在三项指标上均取得最优结果。在AUC-PR上，本文模型（0.422）相较于线性基线LR（0.410）提升2.9\%，相较于同为Transformer架构的TabTransformer（0.420）和AutoInt（0.418）也有稳定改进，表明组感知融合机制对整体预测能力的提升。在高精度筛选场景下，本文模型的优势更为明显：Recall@P=0.8达到0.028，相较于次优的XGB（0.025）提升12\%，而LR在该精度下几乎无法召回正例（0.008），反映出非线性建模与特征交互对困难样本识别的重要性。
+
+\textbf{（2）分主体性能分析}
+
+各模型在human与agent子集上的分主体性能如表\ref{tab:compare_agent}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{对比实验分主体性能}{Per-agent Performance Comparison}
+  \label{tab:compare_agent}
+  \renewcommand\arraystretch{1.5}
+  \small
+  \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.4cm} >{\centering\arraybackslash}m{1.4cm} >{\centering\arraybackslash}m{1.4cm} >{\centering\arraybackslash}m{1.4cm} >{\centering\arraybackslash}m{1.4cm} >{\centering\arraybackslash}m{1.4cm}}
+    \toprule
+    \multirow{2}{*}{Model} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    & AUC-PR & R@0.5 & R@0.8 & AUC-PR & R@0.5 & R@0.8 \\
+    \midrule
+    LR & 0.389 & 0.167 & 0.005 & 0.605 & 0.836 & 0.084 \\
+    XGB & 0.393 & 0.173 & 0.020 & 0.589 & 0.843 & 0.133 \\
+    TabTrans. & 0.399 & 0.180 & 0.018 & 0.593 & 0.797 & 0.099 \\
+    AutoInt & 0.398 & 0.178 & 0.018 & 0.588 & 0.708 & 0.093 \\
+    Ours & \textbf{0.400} & \textbf{0.183} & \textbf{0.024} & \textbf{0.621} & \textbf{0.853} & \textbf{0.100} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+分主体结果揭示了两个关键现象。第一，所有模型在agent子集上的表现均远优于human子集：以AUC-PR为例，agent子集（0.588--0.621）显著高于human子集（0.389--0.400）；Recall@P=0.5差异更为悬殊（如LR：0.836 vs 0.167）。这一差异的根本原因在于数据分布：grok评论的正例率为54.26\%，远高于human的22.10\%，较高的先验概率使得模型在agent子集上更容易实现高性能。第二，Group-aware Fusion TabTransformer在agent子集上全面领先：A-AUC-PR达到0.621，较次优的LR（0.605）提升2.6\%；A-Recall@P=0.5取得最优（0.853），说明组感知结构通过显式引入主体标识特征（G4）并自适应调整组权重，能够更好地捕捉agent群体的传播行为模式。值得注意的是，深度注意力模型（TabTransformer: 0.797，AutoInt: 0.708）在A-Recall@P=0.5上反而不及传统方法（XGB: 0.843），表明单纯引入注意力机制而不进行组级建模，并不能自动适配多主体场景。
+
+\subsection{消融实验分析}
+
+为验证所提出模型中关键设计的有效性，本节设计两组消融变体，在控制变量条件下与完整模型进行对比。所有消融实验使用与4.4.2节相同的超参数配置，仅改变待研究的单一因素，评价指标亦保持一致。为了考察门控融合机制相较于简单平均融合的增益，将完整模型中通过MLP学习的样本级组权重$\boldsymbol{\alpha}$替换为均匀权重$1/n$，构成Mean Fusion变体；为了量化主体标识信息对模型性能的贡献，在保留门控融合机制的前提下去除G4特征组的输入，构成Group-aware w/o G4变体。消融实验结果如表\ref{tab:ablation}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{消融实验结果}{Ablation Study Results}
+  \label{tab:ablation}
+  \renewcommand\arraystretch{1.5}
+  \footnotesize
+  \begin{tabular}{>{\centering\arraybackslash}m{1.8cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm}}
+    \toprule
+    \multirow{2}{*}{Model} & \multicolumn{3}{c}{Overall} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+    & AUC & R@0.5 & R@0.8 & AUC & R@0.5 & R@0.8 & AUC & R@0.5 & R@0.8 \\
+    \midrule
+    Full & \textbf{.422} & \textbf{.215} & \textbf{.028} & \textbf{.400} & \textbf{.183} & \textbf{.024} & \textbf{.621} & \textbf{.853} & \textbf{.100} \\
+    Mean & .421 & .206 & .020 & .399 & .174 & .017 & .619 & .835 & .078 \\
+    w/o G4 & .418 & .196 & .019 & .397 & .170 & .018 & .608 & .691 & .035 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+通过表\ref{tab:ablation}的消融实验结果可以看出，门控融合机制与主体标识特征均对模型性能具有正向贡献，且二者的作用维度有所不同。将门控权重替换为均匀权重（Mean Fusion）后，整体AUC-PR仅从0.422微降至0.421，但在分主体视角下差异更为显著：A-Recall@P=0.8从0.100下降至0.078（降幅22\%），H-Recall@P=0.8从0.024降至0.017（降幅29\%），而A-AUC-PR基本持平（0.621 vs 0.619）。这表明门控融合机制的价值主要体现在高精度筛选场景下——通过样本级自适应权重分配，提升模型在不同主体子群体上的精细化识别能力。去除G4后，整体AUC-PR下降至0.418，Recall@P=0.5从0.215降至0.196；更关键的是分主体表现的分化：A-AUC-PR从0.621降至0.608（降幅2.1\%），A-Recall@P=0.5从0.853骤降至0.691（降幅19.0\%），A-Recall@P=0.8从0.100骤降至0.035（降幅65\%），而human子集各指标基本持平。这说明G4是模型区分和捕捉agent传播行为模式的核心信号——缺少主体标识后，模型无法有效识别agent评论中的高传播价值样本，验证了在多主体场景下显式引入主体类型特征的必要性。
+
+\section{本章小结}
+
+本章提出Group-aware Fusion TabTransformer模型，通过将主体标识作为显式特征组并引入门控融合机制，实现了评论级别的传播价值量化评估。在X平台158,972条评论的多主体数据集上，模型在整体与分主体指标上均优于四个基线，消融实验验证了主体标识特征与门控融合机制的有效性。

@@ -114,12 +114,10 @@
 
 用户上传JSON格式的评论数据文件后，系统首先进行格式校验，校验通过后依次执行comment\_id去重、质量过滤与右删失过滤，随后重构评论树结构并提取文本语义与情感倾向特征，最终将预处理结果写入数据库。
 
-系统要求导入数据中每条评论包含表\ref{tab:import_schema}所列的必要字段。
+系统要求导入数据中每条评论包含以下必要字段：
 
-\begin{table}[htbp]
-  \centering
-  \bicaption{导入数据字段说明}{Import Data Field Description}
-  \label{tab:import_schema}
+\vspace{0.5em}
+\begin{center}
   \renewcommand\arraystretch{1.5}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7.5cm}}
     \toprule
@@ -138,7 +136,8 @@
     agent\_type & integer & 发布者主体类型（0=Human, 1=Agent），由用户在数据准备阶段完成标注 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{center}
+\vspace{0.5em}
 
 \textbf{（2）评估推理流程}
 
@@ -259,7 +258,7 @@
 
 存储多主体对比分析模块生成的数据集级多主体对比分析结果，包括三个维度的聚合统计数据和大语言模型生成的自然语言报告，供仪表盘展示和导出使用。同一数据集可关联多条记录（模型更新后重新评估触发新一轮分析）。对比分析结果表结构如表\ref{tab:analysis_report}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \bicaption{对比分析结果表}{Analysis Report Table}
   \label{tab:analysis_report}
