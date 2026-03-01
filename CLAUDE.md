@@ -24,3 +24,11 @@
 - `design` -> 设计文档（markdown 源稿）
 
 引用图片时直接使用 `resource/figures/` 下的路径（已在 `\graphicspath` 中配置）。
+
+## drawio 图片处理
+
+drawio 直接导出的 PDF 会多页分割，导致 LaTeX 排版异常。解决方法：用 `--crop` 导出单页 PDF：
+
+```bash
+/Applications/draw.io.app/Contents/MacOS/draw.io --export --format pdf --crop --output output.pdf input.drawio
+```
