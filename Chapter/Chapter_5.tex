@@ -43,7 +43,7 @@ y_k = \begin{cases}
 
 \textbf{（2）边异构性}：路径上相邻节点间的交互存在四种类型，每种类型对传播延续的影响不同，如表\ref{tab:interaction_type}所示。
 
-\begin{table}[H]
+\begin{table}[htbp]
   \centering
   \bicaption{路径边异构交互类型定义与传播特征假设}{Definition and Propagation Characteristic Hypotheses of Heterogeneous Edge Interaction Types}
   \label{tab:interaction_type}
@@ -64,7 +64,7 @@ y_k = \begin{cases}
 
 IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分类预测"的五阶段架构，以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入单元，端到端预测节点$v_k$的传播延续概率。模型整体结构如图\ref{fig:ihpe_arch}所示。
 
-\begin{figure}[H]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=0.9\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
   \bicaption{交互感知的异构路径编码器（IHPE）整体结构}{Overall Architecture of Interaction-aware Heterogeneous Path Encoder (IHPE)}
@@ -125,7 +125,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 
 图\ref{fig:interact_encode}以路径$P=[v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例，展示了本层对路径上所有节点的完整编码过程。对路径上每个节点$v_i$，依据其入边的主体类型组合确定交互类型$e_i$（根节点$v_0$取特殊[ROOT]类型，其余节点取$(a_{i-1}, a_i)$对应的四类之一），查询嵌入表后通过残差融合注入节点表示，输出交互增强表示$\mathbf{x}'_i$。路径中$v_1$（H$\to$A）与$v_3$（H$\to$A）共享同一嵌入向量$\mathbf{e}_{\text{H} \to \text{A}}$，体现了嵌入参数的高效复用。
 
-\begin{figure}[H]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=0.9\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
   \bicaption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}{Illustration of Interaction Type Encoding Mechanism}
@@ -220,7 +220,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 原始数据集包含255,754个节点，经移除$t_{\text{obs}}$缺失样本（$-64{,}631$）和随访时长不足12小时的样本（$-24{,}580$）后，最终保留166,543个节点用于模型训练与评估。正例率从原始数据集的10.01\%升至11.33\%，印证了右删失样本对$y=0$的污染：被截断观测的节点在12h内未积累到2跳，被错误标记为负例。过滤后数据集的统计信息与标签分布如表\ref{tab:ch5_dataset}所示。
 
-\begin{table}[H]
+\begin{table}[htbp]
   \centering
   \bicaption{数据集统计与标签分布（右删失过滤后，$T=12\text{h}$）}{Dataset Statistics and Label Distribution (After Right-Censoring Filtering, $T=12$h)}
   \label{tab:ch5_dataset}
@@ -276,7 +276,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 整体性能对比结果如表\ref{tab:ch5_overall}所示。
 
-\begin{table}[H]
+\begin{table}[htbp]
   \centering
   \bicaption{各模型整体性能对比}{Overall Performance Comparison of All Models}
   \label{tab:ch5_overall}
