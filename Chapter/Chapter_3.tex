@@ -1,0 +1,282 @@
+\chapter{系统需求分析与概要设计}
+
+\section{系统概述}
+
+随着AI代理与人类用户共存于社交媒体传播系统，信息传播评估面临新的挑战：现有工具无法在评论级别区分不同主体的传播价值分布，也无法在讨论链层面量化人-机交互序列对传播延续的影响。
+% TODO: 本文研究了这个点了吗？
+本章围绕这一评估需求，对多主体信息认知传播评估系统展开需求分析与概要设计。
+
+系统从信息传播研究的经典分析层次\cite{zhou2021survey}出发，围绕三个评估维度展开设计：\textbf{消息层}关注单条内容的话题吸引力——即评论能否引发直接回应，反映内容在认知与社交层面对受众的吸引程度；\textbf{级联层}关注讨论链的持续动能——即讨论节点能否带动后续对话延伸，反映信息在网络中扩散的深度与可持续性，本文以2跳增长（$\text{depth} \geq 2$）作为传播延续的判定标准：在Goel等人\cite{goel2016structural}提出的"结构病毒性"框架中，$\text{depth}=1$的讨论仅代表信息由单一来源直接触达受众（广播式传播），$\text{depth} \geq 2$则意味着讨论经多代传递产生了超出直接回复的链式扩散（病毒式传播）\cite{zhang2020viral}，Liang\cite{liang2018broadcast}在Twitter数据上以级联深度为操作化判据进一步验证了该区分的有效性，构成传播延续的可靠信号；\textbf{交互类型层}关注路径上相邻节点之间的主体组合（H$\to$H / H$\to$A / A$\to$H / A$\to$A）对传播延续模式的差异化影响，是同质主体系统中不存在而多主体设置所独有的结构性分析维度。
+
+本章的目标是明确上述评估需求的系统化实现方案。以下3.2节从功能性需求与非功能性需求两个方面梳理系统应具备的能力；3.3节给出系统的概要设计方案，涵盖架构设计、模块设计、流程设计与数据库设计，为后续章节的算法设计与系统实现奠定整体框架。
+
+\section{系统需求分析}
+
+在多主体共存的社交媒体环境中，信息传播的评估面临一系列现实需求。在消息层面，研究者需要判断不同主体发布的评论是否具有引发社区讨论的潜力，以理解人类用户与AI代理在内容吸引力上的差异。在级联层面，研究者需要识别哪些讨论链具有持续深入发展的可能而非停滞在浅层回复，尤其需要理解不同主体的交互组合如何影响讨论的延续。在对比分析层面，研究者需要从多个维度系统性地量化两类主体的传播行为差异，而非依赖单一指标的定性判断。此外，社交媒体平台上大量评论数据需要标准化导入和预处理，评估结果需要以直观的可视化形式呈现以支撑研究决策。基于上述现实需求，本节从功能性需求和非功能性需求两个方面对系统进行分析。
+
+\subsection{功能性需求分析}
+
+系统需要实现以下核心功能，各功能沿"数据导入$\to$评估推理$\to$对比分析$\to$结果展示"的业务链路组织：数据导入与预处理为后续评估提供高质量的结构化数据；评论传播价值评估与传播延续预测分别从消息层和级联层对评论进行量化评估；多主体对比分析将评估结果按主体类型聚合，输出系统性的行为差异统计与分析报告；评估结果展示与管理提供查询检索、可视化和数据集管理的统一交互界面。
+
+\textbf{（1）数据导入与预处理}
+
+系统支持导入符合指定schema的评论树原始数据（JSON格式），并自动执行完整的预处理流水线，依次包括：comment\_id去重；质量过滤，剔除采集截止时间缺失的样本，保留空文本节点并标记为传播价值评估不可用；右删失过滤，剔除随访时间不足的样本以确保入模数据与模型训练分布一致；评论树结构重构，建立父子关系并构建路径；特征提取，完成文本语义编码与情感倾向分析。
+
+\textbf{（2）评论传播价值评估}
+
+该功能调用传播价值评估模型，对单条评论进行传播价值打分。模型输入为单条评论的发布时刻固定特征，包括外生上下文信息、文本语义信息、情感倾向信息和主体标识信息；输出为传播价值评分（0--1之间的概率值），数值越高表示该评论在$T=12\text{h}$内获得回复的可能性越大。系统支持对评论按评分排序及按阈值筛选高价值评论。具体算法设计详见第四章。
+
+\textbf{（3）传播延续预测}
+
+该功能调用传播延续预测模型，对评论树中的路径进行传播延续预测。模型输入为评论树中从根节点到目标节点的完整路径，包含路径上每个节点的特征及边的交互类型；输出为2跳增长概率（0--1之间的概率值），数值越高表示该节点在$T=12\text{h}$内引发持续讨论的可能性越大。系统支持对路径按预测概率排序，以识别高传播潜力的讨论链。具体算法设计详见第五章。
+
+\textbf{（4）多主体对比分析}
+
+该功能按主体类型（Human/Agent）分层聚合评估结果，从三个维度进行对比分析：传播价值维度对比不同主体评论传播价值评分的分布（均值、中位数、分位数）；传播延续维度对比不同主体节点2跳增长概率的分布（均值、中位数、分位数）；情感倾向维度对比不同主体评论的正/中/负情感概率分布均值，从内容认知特征角度呈现两类主体在内容表达偏向上的差异。系统据此生成多主体传播行为特征的对比统计，量化两类主体在上述三个维度上的系统性差异，并调用配置的大语言模型后端（支持本地推理或OpenAI-compatible API），基于聚合统计结果生成三段式自然语言分析报告（传播价值差异、传播延续差异、综合结论），报告与统计数据一并展示，支持导出为纯文本格式。
+
+\textbf{（5）评估结果展示与管理}
+
+在查询检索方面，系统支持按主体类型（Human/Agent）、传播价值评分区间、2跳增长概率区间对评估结果进行组合检索，亦可按话题关键词或地区筛选评论树以定位高价值评论或高潜力路径。查询结果以列表形式呈现，支持按评分或概率排序，可从结果条目直接跳转至评论树图表视图。在数据集管理方面，用户可查看所有已导入数据集的元信息（文件名、导入时间、各阶段样本量、评估状态），可删除导入任务及其关联的评论数据、特征数据与评估结果，亦可对已导入数据集重新触发评估推理（如模型权重更新后对原始数据重新评分）。
+
+在可视化方面，系统提供两类视图。评论树图基于D3.js\cite{bostock2011d3}实现，以树形结构展示评论树，节点以颜色区分主体类型（Human/Agent），节点深浅映射传播价值评分，支持节点点击查看评论文本、主体类型、评分与2跳增长概率，并高亮显示高2跳增长概率的路径，边上标注交互类型（H$\to$H / H$\to$A / A$\to$H / A$\to$A）。多主体对比仪表盘基于ECharts实现，包含传播价值评分分布对比（Human与Agent评分分布曲线或箱型图）、2跳增长概率分布对比（Human与Agent概率分布曲线）、情感倾向分布对比（Human与Agent正/中/负情感概率的分组柱状图）、分交互类型传播延续对比（以H$\to$H / H$\to$A / A$\to$H / A$\to$A为分组对比各交互类型下2跳增长概率均值）以及关键指标对比卡片（分别展示Human与Agent的传播价值评分均值、2跳增长概率均值和正面情感概率均值）。此外，系统支持将多主体对比统计数据和评估结果列表导出为CSV格式。
+
+\subsection{非功能性需求分析}
+
+\textbf{（1）性能需求}
+
+系统应在合理时间内完成数据预处理和模型推理。数据预处理阶段涉及评论去重、质量过滤、评论树结构重构和特征提取（包括BGE文本编码和情感分析模型推理），需要支持十万级评论数据的批量处理。模型推理阶段涉及传播价值评估和传播延续预测两个模型的批量推理，应支持高效的GPU/CPU推理调度。具体性能指标待系统实现后通过测试确定。
+
+\textbf{（2）可扩展性}
+
+系统应具备良好的可扩展能力以适应不同的使用场景和数据规模。在数据层面，支持不同规模的数据集导入，不因数据量增大而导致功能异常。在模型层面，评估模型组件可独立替换或升级，模型权重更新后可对已导入数据重新执行评估推理。在外部服务层面，多主体对比分析中的大语言模型后端可通过配置文件切换（本地推理模型或OpenAI-compatible API调用），无需修改业务逻辑代码。
+
+\textbf{（3）易用性}
+
+系统应提供直观的Web交互界面，降低用户使用门槛。用户无需了解底层算法原理和模型细节即可完成从数据导入到评估结果查看的完整流程，评论树可视化和多主体对比仪表盘以图表形式直观呈现评估结果，查询检索支持多条件组合筛选并可从列表直接跳转至可视化视图。
+
+\section{系统概要设计}
+
+\subsection{系统架构设计}
+
+系统采用四层架构，自底向上分别为数据层、支撑层、业务层和表现层，整体架构如图\ref{fig:system_arch}所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{G5-1/图5-1 系统架构概览图.cropped.pdf}
+  \bicaption{系统架构概览图}{System Architecture Overview}
+  \label{fig:system_arch}
+\end{figure}
+
+\textbf{（1）数据层}。基于SQLite数据库，存储导入任务记录、评论数据、提取特征及模型评估结果，为上层提供统一的数据读写接口。具体表结构见3.3.4节。
+
+\textbf{（2）支撑层}。放置传播价值评估模型（详见第四章）和传播延续预测模型（详见第五章），以及预训练特征提取模型（BGE编码器、情感分析模型）和大语言模型后端（可配置为本地推理模型或OpenAI-compatible API，用于综合报告生成），为业务层提供算法能力。
+
+\textbf{（3）业务层}。封装具体的业务逻辑，包括数据预处理流水线、模型推理调用、结果聚合分析等，通过RESTful服务接口\cite{fielding2002principled}向表现层提供数据。
+
+\textbf{（4）表现层}。提供Web界面，实现评论树可视化、评估结果展示和多主体对比分析的交互功能。
+
+在层间交互上，支撑层的算法模型与业务层解耦，业务层通过统一的推理接口调用模型，模型可独立更新而不影响业务逻辑；表现层不直接调用支撑层算法，所有数据通过业务层获取。
+
+图\ref{fig:tech_arch}给出了系统的技术架构，标注了各层采用的具体技术。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{G5-2/图5-2 系统技术架构图.cropped.pdf}
+  \bicaption{系统技术架构图}{System Technology Architecture}
+  \label{fig:tech_arch}
+\end{figure}
+
+\subsection{系统模块设计}
+
+系统按功能职责划分为数据管理和评估分析与展示两个子系统，共包含6个功能模块，系统模块结构如图\ref{fig:module_design}所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{G5-3/图5-3 系统模块设计图.cropped.pdf}
+  \bicaption{系统模块设计图}{System Module Design}
+  \label{fig:module_design}
+\end{figure}
+
+各模块间的依赖关系为：数据导入与预处理模块的处理结果通过数据存储模块持久化；传播价值评估与传播延续预测两个评估模块从数据存储模块读取数据并行执行推理，结果写回数据存储模块；多主体对比分析模块依赖两个评估模块的输出，分析结果写回数据存储模块；评估结果展示与管理模块从数据存储模块读取所有评估与分析结果，提供查询检索、数据集管理、评论树可视化与仪表盘图表的统一交互界面。
+
+\subsection{系统流程设计}
+
+系统的核心业务流程如图\ref{fig:business_flow}所示，涵盖从数据导入到评估结果展示的端到端流程：
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{G5-4/图5-4 系统业务流程图.cropped.pdf}
+  \bicaption{系统业务流程图}{System Business Flow}
+  \label{fig:business_flow}
+\end{figure}
+
+\textbf{（1）数据导入流程}
+
+用户上传JSON格式的评论数据文件后，系统首先进行格式校验，校验通过后依次执行comment\_id去重、质量过滤与右删失过滤，随后重构评论树结构并提取文本语义与情感倾向特征，最终将预处理结果写入数据库。
+
+系统要求导入数据中每条评论包含表\ref{tab:import_schema}所列的必要字段。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{导入数据字段说明}{Import Data Field Description}
+  \label{tab:import_schema}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7.5cm}}
+    \toprule
+    字\quad 段 & 类\quad 型 & 说\quad 明 \\
+    \midrule
+    tweet\_id & string & 评论唯一标识 \\
+    user\_id & string & 发布者用户ID \\
+    username & string & 发布者用户名 \\
+    tweet\_text & string & 评论文本内容 \\
+    created\_at & string & 发布时间（UTC） \\
+    is\_reply & boolean & 是否为回复 \\
+    in\_reply\_to\_tweet\_id & string/null & 被回复评论的ID \\
+    search\_keyword & string & 检索关键词 \\
+    trending\_zone & string & 话题来源地区 \\
+    crawl\_time & string & 采集截止时间（UTC） \\
+    agent\_type & integer & 发布者主体类型（0=Human, 1=Agent），由用户在数据准备阶段完成标注 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（2）评估推理流程}
+
+系统加载预处理数据后，并行执行两条推理链路：模块3逐条评论构建特征向量并调用传播价值评估模型输出传播价值评分，模块4逐条路径构建路径序列与交互类型编码并调用传播延续预测模型输出2跳增长概率。两条链路的推理结果写入evaluation\_result表后，模块5按主体类型分层聚合传播价值、传播延续与情感倾向三个维度的评估结果生成对比统计，并调用LLM后端生成自然语言分析报告，最终写入analysis\_report表。
+
+\textbf{（3）可视化交互流程}
+
+用户选择目标评论树或话题后，系统加载对应的评论树结构与评估结果并渲染可视化视图。用户可通过节点点击、路径选择或主体类型筛选等交互操作，动态更新展示内容。
+
+\subsection{系统数据库设计}
+
+数据存储模块负责系统全流程数据的结构化持久存储，为数据导入模块提供写入接口，为评估模块、对比分析模块和可视化模块提供读取接口。系统采用SQLite作为存储引擎，设计5张数据表，覆盖从原始数据到评估结果的完整数据链路。
+
+\textbf{（1）导入任务表（import\_task）}
+
+记录每次数据导入操作的元信息与处理进度。该表以每次导入操作为单位，保存导入文件名称、导入时间、各预处理阶段（去重、质量过滤、右删失过滤）的样本计数以及最终构建的评论树数量，同时通过status字段跟踪当前导入任务的处理状态，便于用户追溯数据来源、了解预处理各环节的数据衰减情况并定位异常任务。导入任务表结构如表\ref{tab:import_task}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{导入任务表}{Import Task Table}
+  \label{tab:import_task}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{7.5cm}}
+    \toprule
+    字段名称 & 数据类型 & 描述信息 \\
+    \midrule
+    id & INTEGER & 导入任务唯一标识（主键，自增） \\
+    file\_name & VARCHAR(256) & 导入文件名称 \\
+    import\_time & DATETIME & 导入时间 \\
+    raw\_count & INTEGER & 原始评论条数 \\
+    dedup\_count & INTEGER & 去重后条数 \\
+    filtered\_count & INTEGER & 质量过滤后条数 \\
+    final\_count & INTEGER & 右删失过滤后最终条数 \\
+    tree\_count & INTEGER & 评论树数量 \\
+    status & VARCHAR(32) & 处理状态（pending/processing/completed/failed） \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（2）评论数据表（comment）}
+
+存储经预处理后的评论数据，是系统的核心数据表。每条记录对应一条评论，包含评论文本、发布时间、发布者信息及主体类型标注等原始字段，同时记录该评论在评论树中的结构信息：通过in\_reply\_to\_tweet\_id字段建立父子回复关系，通过root\_tweet\_id字段关联所属评论树的根推文，通过depth字段标记节点在树中的层级深度。此外，eligible\_for\_value\_eval字段标记该评论是否可用于传播价值评估（空文本节点标记为False）。评论数据表结构如表\ref{tab:comment}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{评论数据表}{Comment Table}
+  \label{tab:comment}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{4cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7cm}}
+    \toprule
+    字段名称 & 数据类型 & 描述信息 \\
+    \midrule
+    tweet\_id & VARCHAR(64) & 评论唯一标识（主键） \\
+    import\_id & INTEGER & 所属导入任务ID（外键$\to$import\_task） \\
+    user\_id & VARCHAR(64) & 发布者用户ID \\
+    username & VARCHAR(128) & 发布者用户名 \\
+    tweet\_text & TEXT & 评论文本内容 \\
+    created\_at & DATETIME & 发布时间（UTC） \\
+    crawl\_time & DATETIME & 采集截止时间（UTC） \\
+    trending\_zone & VARCHAR(64) & 话题来源地区 \\
+    search\_keyword & VARCHAR(256) & 检索关键词 \\
+    is\_reply & BOOLEAN & 是否为回复 \\
+    in\_reply\_to\_tweet\_id & VARCHAR(64) & 被回复评论的ID（外键$\to$comment，可为空） \\
+    root\_tweet\_id & VARCHAR(64) & 所属评论树根推文ID \\
+    agent\_type & INTEGER & 主体类型（0=Human, 1=Agent），来源于导入数据中的用户标注字段 \\
+    depth & INTEGER & 在评论树中的深度（根节点为0） \\
+    eligible\_for\_value\_eval & BOOLEAN & 是否可用于传播价值评估（tweet\_text非空则为True） \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（3）评论特征表（comment\_feature）}
+
+存储特征提取阶段的输出，与comment表一一对应，供评估模块读取用于模型推理。每条记录包含三类特征：文本语义特征，即通过BGE编码器生成的768维稠密向量，以BLOB格式序列化存储；情感倾向特征，即通过情感分析模型输出的正面、中性、负面三类情感概率；外生上下文特征，包括从发布时间提取的小时与星期信息以及话题来源地区，用于捕获时间和地域维度的传播环境差异。评论特征表结构如表\ref{tab:comment_feature}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{评论特征表}{Comment Feature Table}
+  \label{tab:comment_feature}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{8cm}}
+    \toprule
+    字段名称 & 数据类型 & 描述信息 \\
+    \midrule
+    tweet\_id & VARCHAR(64) & 评论ID（主键，外键$\to$comment） \\
+    bge\_embedding & BLOB & BGE文本语义编码（768维浮点数组序列化存储） \\
+    sentiment\_pos & REAL & 正面情感概率 \\
+    sentiment\_neu & REAL & 中性情感概率 \\
+    sentiment\_neg & REAL & 负面情感概率 \\
+    hour\_of\_day & INTEGER & 发布小时（0--23，从created\_at提取） \\
+    day\_of\_week & INTEGER & 发布星期（0=周一，6=周日，从created\_at提取） \\
+    trending\_zone & VARCHAR(64) & 话题来源地区（从comment表同步，供外生上下文特征组装） \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（4）评估结果表（evaluation\_result）}
+
+存储两个评估模块的推理输出，供对比分析和可视化模块读取。对于传播价值评估不可用的记录（空文本节点），传播价值评分字段存为NULL，仅传播延续预测模块的字段有效。评估结果表结构如表\ref{tab:eval_result}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{评估结果表}{Evaluation Result Table}
+  \label{tab:eval_result}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7.5cm}}
+    \toprule
+    字段名称 & 数据类型 & 描述信息 \\
+    \midrule
+    tweet\_id & VARCHAR(64) & 评论ID（主键，外键$\to$comment） \\
+    propagation\_score & REAL & 传播价值评分（传播价值评估模型输出，0--1；eligible\_for\_value\_eval=False时为NULL） \\
+    growth\_probability & REAL & 2跳增长概率（传播延续预测模型输出，0--1） \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{（5）对比分析结果表（analysis\_report）}
+
+存储多主体对比分析模块生成的数据集级多主体对比分析结果，包括三个维度的聚合统计数据和大语言模型生成的自然语言报告，供仪表盘展示和导出使用。同一数据集可关联多条记录（模型更新后重新评估触发新一轮分析）。对比分析结果表结构如表\ref{tab:analysis_report}所示。
+
+\begin{table}[htbp]
+  \centering
+  \bicaption{对比分析结果表}{Analysis Report Table}
+  \label{tab:analysis_report}
+  \renewcommand\arraystretch{1.5}
+  \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{8.5cm}}
+    \toprule
+    字段名称 & 数据类型 & 描述信息 \\
+    \midrule
+    id & INTEGER & 分析记录唯一标识（主键，自增） \\
+    import\_id & INTEGER & 所属导入任务ID（外键$\to$import\_task） \\
+    created\_at & DATETIME & 分析生成时间 \\
+    stats\_json & TEXT & 聚合统计数据（JSON格式，含Human/Agent在传播价值、传播延续、情感倾向三个维度的均值、中位数、分位数，及各交互类型传播延续均值） \\
+    llm\_report\_text & TEXT & 大语言模型生成的自然语言分析报告（三段式：传播价值差异、传播延续差异、综合结论） \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{本章小结}
+
+本章围绕多主体信息认知传播评估系统完成了需求分析与概要设计。首先，3.1节在第一章研究背景的基础上，明确了系统围绕消息层、级联层与交互类型层三个评估维度展开设计的总体目标，并以2跳增长作为级联层传播延续的判定标准。其次，3.2节从功能性需求和非功能性需求两个方面对系统进行了需求分析：功能性需求涵盖数据导入与预处理、评论传播价值评估、传播延续预测、多主体对比分析、评估结果展示与管理等五类核心功能；非功能性需求从性能、可扩展性和易用性三个方面提出了约束。最后，3.3节给出了系统的概要设计方案：架构设计采用数据层、支撑层、业务层和表现层的四层架构，支撑层的两个核心算法模块与业务层解耦，通过统一推理接口调用；模块设计划分了6个功能模块并明确了模块间的数据流依赖关系；流程设计描述了从数据导入到评估结果展示的端到端业务流程；数据库设计基于SQLite定义了5张数据表的完整schema及表间关系，为系统的数据存储提供了结构化基础。本章的需求分析与概要设计为后续章节的核心算法模型设计以及系统实现与测试提供了整体框架与设计依据。
