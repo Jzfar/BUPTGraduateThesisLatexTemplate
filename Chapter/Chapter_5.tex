@@ -45,7 +45,7 @@ y_k = \begin{cases}
 
 \begin{table}[htbp]
   \centering
-  \bicaption{路径边异构交互类型定义与传播特征假设}{Definition and Propagation Characteristic Hypotheses of Heterogeneous Edge Interaction Types}
+  \caption{路径边异构交互类型定义与传播特征假设}
   \label{tab:interaction_type}
   \renewcommand\arraystretch{1.5}
   \begin{tabular}{>{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{6cm}}
@@ -67,7 +67,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.9\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
-  \bicaption{交互感知的异构路径编码器（IHPE）整体结构}{Overall Architecture of Interaction-aware Heterogeneous Path Encoder (IHPE)}
+  \caption{交互感知的异构路径编码器（IHPE）整体结构}
   \label{fig:ihpe_arch}
 \end{figure}
 
@@ -128,7 +128,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.9\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
-  \bicaption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}{Illustration of Interaction Type Encoding Mechanism}
+  \caption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}
   \label{fig:interact_encode}
 \end{figure}
 
@@ -222,7 +222,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 \begin{table}[htbp]
   \centering
-  \bicaption{数据集统计与标签分布（右删失过滤后，$T=12\text{h}$）}{Dataset Statistics and Label Distribution (After Right-Censoring Filtering, $T=12$h)}
+  \caption{数据集统计与标签分布（右删失过滤后，$T=12\text{h}$）}
   \label{tab:ch5_dataset}
   \renewcommand\arraystretch{1.5}
   \begin{tabular}{>{\centering\arraybackslash}m{5.5cm} >{\centering\arraybackslash}m{6cm}}
@@ -278,7 +278,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 \begin{table}[htbp]
   \centering
-  \bicaption{各模型整体性能对比}{Overall Performance Comparison of All Models}
+  \caption{各模型整体性能对比}
   \label{tab:ch5_overall}
   \renewcommand\arraystretch{1.5}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm}}
@@ -301,7 +301,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 \begin{table}[H]
   \centering
-  \bicaption{各模型分主体性能对比}{Per-Agent Performance Comparison of All Models}
+  \caption{各模型分主体性能对比}
   \label{tab:ch5_peragent}
   \renewcommand\arraystretch{1.5}
   \footnotesize
@@ -343,7 +343,7 @@ IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提�
 
 \begin{table}[H]
   \centering
-  \bicaption{核心组件消融实验结果（整体）}{Ablation Study Results of Core Components (Overall)}
+  \caption{核心组件消融实验结果（整体）}
   \label{tab:ch5_ablation}
   \renewcommand\arraystretch{1.5}
   \footnotesize
@@ -362,7 +362,7 @@ IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提�
 
 \begin{table}[H]
   \centering
-  \bicaption{核心组件消融实验结果（分主体）}{Ablation Study Results of Core Components (Per-Agent)}
+  \caption{核心组件消融实验结果（分主体）}
   \label{tab:ch5_ablation_agent}
   \renewcommand\arraystretch{1.5}
   \footnotesize
