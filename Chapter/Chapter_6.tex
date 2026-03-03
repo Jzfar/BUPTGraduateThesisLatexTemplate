@@ -1,4 +1,4 @@
-\chapter{多主体信息认知传播评估系统的实现与测试}
+\chapter{多主体信息传播影响力评估系统的实现与测试}
 
 \section{系统实现}
 
@@ -26,9 +26,9 @@
 
 \textbf{（5）特征提取}
 
-特征提取涵盖四个方面：首先，BGE文本编码调用BAAI/bge-base-en-v1.5模型，将评论文本编码为768维稠密向量；其次，情感分析调用cardiffnlp/twitter-roberta-base-sentiment-latest模型，输出3维情感概率向量；此外，外生上下文特征从发布时间中提取小时（0--23）和星期（0--6），从话题地区提取地区信息，均采用独热编码；最后，主体标识直接读取导入数据中的agent\_type字段（0=Human, 1=Agent），该字段由用户在数据准备阶段完成标注。
+特征提取涵盖四个方面：首先，BGE文本编码调用BAAI/bge-base-en-v1.5模型，将评论文本编码为768维稠密向量；其次，情感分析调用cardiffnlp/twitter-roberta-base-sentiment-latest模型，输出3维情感概率向量；此外，发布环境特征从发布时间中提取小时（0--23）和星期（0--6），从话题地区提取地区信息，均采用独热编码；最后，主体标识直接读取导入数据中的agent\_type字段（0=Human, 1=Agent），该字段由用户在数据准备阶段完成标注。
 
-数据导入与预处理模块的处理流程如图\ref{fig:import_flow}所示，对应run\_import\_pipeline()函数的七步流水线。系统接收JSON文件后创建导入任务记录（标记为处理中），随后依次执行：格式校验（检查11个必要字段是否完整，不通过则终止并标记为失败）、评论ID去重、质量过滤（剔除采集时间缺失样本，标记空文本节点为传播价值评估不可用）、右删失过滤（剔除随访时间$A<T$的样本）、评论树结构重构（BFS计算节点深度与所属根节点）、特征提取（BGE文本编码、情感分析、外生上下文特征）。最后执行数据库写入，跳过已存在的评论ID以支持跨导入去重，批量写入Comment与CommentFeature表，完成后更新各阶段计数并标记为已完成。
+数据导入与预处理模块的处理流程如图\ref{fig:import_flow}所示，对应run\_import\_pipeline()函数的七步流水线。系统接收JSON文件后创建导入任务记录（标记为处理中），随后依次执行：格式校验（检查11个必要字段是否完整，不通过则终止并标记为失败）、评论ID去重、质量过滤（剔除采集时间缺失样本，标记空文本节点为传播价值评估不可用）、右删失过滤（剔除随访时间$A<T$的样本）、评论树结构重构（BFS计算节点深度与所属根节点）、特征提取（BGE文本编码、情感分析、发布环境特征）。最后执行数据库写入，跳过已存在的评论ID以支持跨导入去重，批量写入Comment与CommentFeature表，完成后更新各阶段计数并标记为已完成。
 
 \begin{figure}[H]
   \centering
@@ -76,7 +76,7 @@
 
 \textbf{（2）特征组装}
 
-推理前从预处理结果中提取单条评论的四组特征：G1外生上下文特征包括话题地区独热编码（类别数与训练数据集一致）、发布小时独热编码（24维）和星期独热编码（7维）；G2文本语义特征为768维BGE编码向量；G3情感倾向特征为3维情感概率向量；G4主体标识特征为1维agent\_type。
+推理前从预处理结果中提取单条评论的四组特征：G1发布环境特征包括话题地区独热编码（类别数与训练数据集一致）、发布小时独热编码（24维）和星期独热编码（7维）；G2文本语义特征为768维BGE编码向量；G3情感倾向特征为3维情感概率向量；G4主体标识特征为1维agent\_type。
 
 \textbf{（3）推理与评分}
 
@@ -108,7 +108,7 @@
 
 评论传播价值评估模块（第6.1.3节）与传播延续预测模块在系统架构中具有对称的结构设计，图\ref{fig:eval_class}以统一的类图展示两个评估模块的静态结构及其与支撑层、数据存储层的关系。评估推理的公共入口为eval\_service模块的run\_eval()函数，内部分别调用\_run\_tab\_transformer()和\_run\_ihpe()两条推理链路。支撑层的tab\_transformer模块和ihpe模块各自封装一个PyTorch模型实例（GroupFusionTabTransformer、IHPE），通过模块级的infer()/infer\_paths()接口向业务层提供推理能力，模型权重可独立替换而不影响业务逻辑。
 
-特征组装与路径构造逻辑分别内联于\_run\_tab\_transformer()（组装G1外生上下文、G2文本语义、G3情感倾向、G4主体标识四组特征）和\_run\_ihpe()（按深度排序构建根到目标路径并利用父路径缓存计算交互类型编码）中，从数据存储模块读取预提取特征并转换为模型所需的输入格式。
+特征组装与路径构造逻辑分别内联于\_run\_tab\_transformer()（组装G1发布环境、G2文本语义、G3情感倾向、G4主体标识四组特征）和\_run\_ihpe()（按深度排序构建根到目标路径并利用父路径缓存计算交互类型编码）中，从数据存储模块读取预提取特征并转换为模型所需的输入格式。
 
 \begin{figure}[H]
   \centering
@@ -119,7 +119,7 @@
 
 \subsection{多主体对比分析模块的实现}
 
-该模块聚合评论传播价值评估模块和传播延续预测模块的输出，按主体类型进行分层对比分析，是系统实现"间接刻画信息认知传播特征"这一总任务的核心模块。
+该模块聚合评论传播价值评估模块和传播延续预测模块的输出，按主体类型进行分层对比分析，是系统实现"量化多主体信息传播影响力差异"这一总任务的核心模块。两个评估模块基于节点发布时刻的静态特征对数据集中全量节点统一评分，评分反映的是内禀传播潜力而非已知结果的复述，由此保证按主体类型分组聚合后的统计对比具有充分的样本覆盖与分析意义。
 
 评论传播价值评估模块与传播延续预测模块从两个互补视角刻画同一节点的传播潜力：前者（评论级）回答"该评论本身能否吸引直接回复"，反映评论内容的话题吸引力；后者（路径级）回答"该节点所在的讨论链能否持续延伸"，反映节点所处对话情境的传播张力。二者的预测结果在逻辑上可能出现分离——一条评论可以在内容层面具有较高传播价值（高回复吸引力），但处于已趋于收敛的讨论链末端（低路径延续概率）；反之，一条内容普通的评论也可能因所处交互序列的动态特征而具有较高路径延续概率。本模块将两个维度联合呈现，避免单一指标遮蔽传播特征的某一侧面，在"评论质量"与"讨论情境"的交叉视角下更完整地刻画多主体的传播行为差异。
 
@@ -137,11 +137,11 @@
 
 \textbf{（4）情感倾向维度对比}
 
-该步骤从CommentFeature表读取正面、中性、负面三类情感概率，按主体类型分组，计算Human与Agent评论各情感概率的分布均值对比。从内容认知特征角度呈现两类主体在内容表达偏向（情感倾向）上的系统性差异，与传播价值和传播延续维度形成互补：两类主体的行为差异（是否获得回复、是否引发延续）可与内容特征差异（情感偏向）对照，为解读传播机制差异提供认知层面的参照。
+该步骤从CommentFeature表读取正面、中性、负面三类情感概率，按主体类型分组，计算Human与Agent评论各情感概率的分布均值对比。从内容表达特征角度呈现两类主体在内容表达偏向（情感倾向）上的系统性差异，与传播价值和传播延续维度形成互补：两类主体的行为差异（是否获得回复、是否引发延续）可与内容特征差异（情感偏向）对照，为解读传播影响力差异提供内容层面的参照。
 
 \textbf{（5）综合传播特征报告生成}
 
-本模块将三个维度的分层统计结果（Human/Agent各自的传播价值评分分布参数、2跳增长概率分布参数、情感概率均值、各交互类型传播延续均值）结构化为固定格式的提示词（prompt），调用配置的大语言模型后端（可配置为本地推理或OpenAI-compatible API），生成一段自然语言的多主体传播特征分析报告。报告结构固定为三个段落：（一）两类主体传播价值分布差异及解读；（二）两类主体传播延续能力差异及交互类型影响；（三）综合结论，对当前数据集下的多主体信息认知传播特征作出简要判断。LLM的输入仅为聚合统计量（均值、中位数、分位数等数值），不包含原始评论文本；提示词采用固定模板将统计量填入结构化指令，保证输出格式的可复现性。三个维度的聚合统计数据与LLM生成报告一并写入AnalysisReport表持久化存储，供仪表盘展示和导出使用。
+本模块将三个维度的分层统计结果（Human/Agent各自的传播价值评分分布参数、2跳增长概率分布参数、情感概率均值、各交互类型传播延续均值）结构化为固定格式的提示词（prompt），调用配置的大语言模型后端（可配置为本地推理或OpenAI-compatible API），生成一段自然语言的多主体传播特征分析报告。报告结构固定为三个段落：（一）两类主体传播价值分布差异及解读；（二）两类主体传播延续能力差异及交互类型影响；（三）综合结论，对当前数据集下的多主体信息传播影响力特征作出简要判断。LLM的输入仅为聚合统计量（均值、中位数、分位数等数值），不包含原始评论文本；提示词采用固定模板将统计量填入结构化指令，保证输出格式的可复现性。三个维度的聚合统计数据与LLM生成报告一并写入AnalysisReport表持久化存储，供仪表盘展示和导出使用。
 
 多主体对比分析模块的交互时序如图\ref{fig:analysis_seq}所示，展示了从触发分析到报告生成的完整协作流程。API路由层首先校验导入任务是否存在且评估结果是否已生成，随后将请求委派至analysis\_service模块的run\_analysis()函数；该函数联表查询Comment、CommentFeature与EvaluationResult后，按主体类型将数据分为Human子集和Agent子集，依次调用\_compute\_group\_stats()计算两个子集在传播价值、传播延续和情感倾向三个维度的分布统计量（均值、中位数、四分位数），再调用\_compute\_interaction\_stats()根据评论树父子关系动态计算各交互类型（H$\to$H / H$\to$A / A$\to$H / A$\to$A）下的2跳增长概率均值。最后调用\_generate\_llm\_report()将统计结果填入固定提示词模板并通过OpenAI-compatible API请求LLM后端生成三段式自然语言分析报告，统计数据与报告文本一并写入AnalysisReport表。
 
@@ -195,7 +195,7 @@
 
 系统测试在表\ref{tab:test_env}所列的软硬件环境下进行。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \caption{测试环境配置}
   \label{tab:test_env}
@@ -222,126 +222,113 @@
 
 \subsection{功能测试}
 
-针对系统各功能模块，设计功能测试用例并进行验证。
+针对系统的四项核心功能，设计功能测试用例并进行验证。四项测试按"综合排序—两个评估模块独立演示—分主体评估"的逻辑组织：首先展示以传播价值与传播延续加权综合排序的评估结果列表，随后分别演示传播价值评估与传播延续预测两个模块的独立可视化功能，最后展示多主体对比分析的分主体评估结果。
 
-\subsubsection{数据导入与预处理功能测试}
+\subsubsection{综合评估结果排序功能测试}
 
-数据导入与存储验证测试用例如表\ref{tab:test_import}所示，数据导入功能效果如图\ref{fig:test_import}所示。
+综合评估结果排序功能测试用例如表\ref{tab:test_rank}所示，排序结果效果如图\ref{fig:test_rank}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
-  \caption{数据导入与存储验证测试用例}
-  \label{tab:test_import}
+  \caption{综合评估结果排序功能测试用例}
+  \label{tab:test_rank}
   \renewcommand\arraystretch{1.3}
   \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
+  \begin{tabular}{|>{\centering\arraybackslash}m{1.5cm}|>{\raggedright\arraybackslash}m{5.2cm}|>{\raggedright\arraybackslash}m{5.8cm}|}
+    \hline
     序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 准备包含评论树原始数据的JSON文件，文件为JSON数组，每条记录包含11个必要字段，数据中包含重复评论ID记录、采集时间缺失记录及随访时间不足12小时的记录 & JSON文件格式合法，包含可触发去重、质量过滤和右删失过滤的多类测试数据 \\
-    2 & 进入"数据管理"页面，点击上传区域选择该JSON文件上传 & 页面显示蓝色提示"正在处理，请稍候……" \\
-    3 & 等待系统完成预处理流水线（格式校验、去重、质量过滤、右删失过滤、评论树重构、特征提取、数据库写入） & 页面弹出成功提示，显示各阶段计数逐步递减 \\
-    4 & 点击"刷新"按钮，在数据集列表中查看新增记录 & 列表新增一行，文件名与上传文件一致，各计数字段与成功提示一致，状态显示绿色"completed" \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
+    \hline
+    1 & 进入"评估结果"页面，选择已完成评估的数据集，观察顶部筛选栏 & 筛选栏提供"传播价值$\geq$"和"增长概率$\geq$"两个阈值输入框、主体类型下拉筛选（全部/Human/Agent）、排序方式选择（加权平均）以及传播价值与增长概率的权重比例配置（默认1:1） \\
+    \hline
+    2 & 将"传播价值$\geq$"设为0.4、"增长概率$\geq$"设为0.4，权重比例保持1:1，点击"查询" & 列表仅展示同时满足两个阈值条件的评论节点，按综合评分（传播价值与增长概率的加权平均）降序排列，每行包含主体类型标签、用户名、评论内容摘要、传播价值评分（绿色渐变条）、增长概率（黄色渐变条）、情感概率分布（正/中/负）及发布时间 \\
+    \hline
+    3 & 观察排名靠前的评论条目及其主体类型分布 & 排名第1的Human评论传播价值0.820、增长概率0.880，排名第2的Agent评论传播价值0.790、增长概率0.830，Human与Agent在高排名区域均有分布，体现系统对不同主体传播潜力的无偏评估 \\
+    \hline
+    4 & 对比排名靠前与靠后的条目，点击靠前条目的"树图"按钮 & 排名靠前的评论两项评分均较高，靠后的评论至少一项接近阈值下限；点击"树图"按钮后跳转至该评论所在评论树的可视化视图，实现从列表到图表的联动 \\
+    \hline
+    测试结果 & \multicolumn{2}{l|}{通过} \\
+    \hline
+    异\quad 常 & \multicolumn{2}{l|}{无} \\
+    \hline
   \end{tabular}
 \end{table}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{TEST/数据导入与存储验证测试用例.png}
-  \caption{数据导入功能效果图}
-  \label{fig:test_import}
-\end{figure}
-
-异常数据导入测试用例如表\ref{tab:test_import_err}所示，异常数据导入提示效果如图\ref{fig:test_import_err}所示。
-
-\begin{table}[htbp]
-  \centering
-  \caption{异常数据导入测试用例}
-  \label{tab:test_import_err}
-  \renewcommand\arraystretch{1.3}
-  \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
-    序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 准备一个缺少必要字段的JSON文件，例如第1条记录中缺少tweet\_id和created\_at字段 & JSON文件已准备，包含字段不完整的记录 \\
-    2 & 进入"数据管理"页面，点击上传区域上传该异常JSON文件 & 系统执行格式校验 \\
-    3 & 观察系统返回的错误提示 & 页面显示红色错误提示，明确指出缺失字段名称，数据未写入数据库 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.9\textwidth]{TEST/异常数据导入测试用例.png}
-  \caption{异常数据导入提示效果图}
-  \label{fig:test_import_err}
+  \includegraphics[width=0.9\textwidth]{TEST/综合评估结果排序功能测试.png}
+  \caption{综合评估结果排序效果图}
+  \label{fig:test_rank}
 \end{figure}
 
 \subsubsection{评论传播价值评估功能测试}
 
-评论传播价值评估功能测试用例如表\ref{tab:test_value}所示，评估结果效果如图\ref{fig:test_value}所示。
+评论传播价值评估功能测试用例如表\ref{tab:test_value}所示，评估结果的树形可视化效果如图\ref{fig:test_value}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \caption{评论传播价值评估功能测试用例}
   \label{tab:test_value}
   \renewcommand\arraystretch{1.3}
   \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
+  \begin{tabular}{|>{\centering\arraybackslash}m{1.5cm}|>{\raggedright\arraybackslash}m{5.2cm}|>{\raggedright\arraybackslash}m{5.8cm}|}
+    \hline
     序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 在"数据管理"页面选择状态为"completed"的数据集，点击操作列的绿色"评估"按钮 & 系统调用Group-aware Fusion TabTransformer和IHPE模型依次执行批量推理，弹出提示显示评估总数、传播价值评分数和增长预测数 \\
-    2 & 切换至"评估结果"页面，选择该数据集，排序选"传播价值$\downarrow$"，点击"查询" & 结果列表按传播价值评分降序排列，每行显示主体类型、评论内容、传播价值评分（带颜色条）、增长概率、情感概率、发布时间 \\
-    3 & 观察"传播价值"列的评分值与颜色条 & 所有评分在[0, 1]区间内，颜色条：$\geq$0.7绿色、$\geq$0.4橙色、$<$0.4红色 \\
-    4 & 设置"传播价值$\geq$"为0.5，点击"查询" & 返回结果中所有评论的传播价值评分均$\geq$0.5 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
+    \hline
+    1 & 进入"传播价值"页面，选择已评估数据集，在根节点下拉框中选择一棵评论树，点击"重绘" & 页面渲染树形结构，节点颜色区分主体类型（蓝色为Human、橙色为Agent），节点大小与传播价值评分成正比，底部图例标注数据集名称、节点统计（含Human/Agent数量）及"节点大小 = 传播价值评分" \\
+    \hline
+    2 & 观察同一父节点下的多个子节点的大小差异 & 有后续回复的子节点圆形明显大于无回复的兄弟节点，体现模型在相同上下文下能够区分不同评论的传播价值差异 \\
+    \hline
+    3 & 将鼠标悬停在一个圆形极小的节点上，查看浮动提示信息 & 提示框显示用户名、主体类型（Human）、传播价值评分（0.0600）、增长概率（0.0400），评论内容为单个表情符号，信息量低且未获得回复，与其低传播价值评分一致 \\
+    \hline
+    4 & 对比树中不同位置的大节点与小节点 & 大节点（高传播价值）多出现在讨论活跃的分支上，小节点（低传播价值）多为讨论终止的叶子节点，评分分布符合评论树的实际传播结构 \\
+    \hline
+    测试结果 & \multicolumn{2}{l|}{通过} \\
+    \hline
+    异\quad 常 & \multicolumn{2}{l|}{无} \\
+    \hline
   \end{tabular}
 \end{table}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{TEST/评论传播价值评估测试用例.png}
-  \caption{评论传播价值评估结果效果图}
+  \caption{评论传播价值评估树形可视化效果图}
   \label{fig:test_value}
 \end{figure}
 
 \subsubsection{传播延续预测功能测试}
 
-传播延续预测功能测试用例如表\ref{tab:test_growth}所示，预测结果效果如图\ref{fig:test_growth}所示。
+传播延续预测功能测试用例如表\ref{tab:test_growth}所示，预测结果的树形可视化效果如图\ref{fig:test_growth}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \caption{传播延续预测功能测试用例}
   \label{tab:test_growth}
   \renewcommand\arraystretch{1.3}
   \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
+  \begin{tabular}{|>{\centering\arraybackslash}m{1.5cm}|>{\raggedright\arraybackslash}m{5.2cm}|>{\raggedright\arraybackslash}m{5.8cm}|}
+    \hline
     序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 在"评估结果"页面，选择已完成评估的数据集，排序切换为"增长概率$\downarrow$"，点击"查询" & 结果列表按2跳增长概率从高到低排列 \\
-    2 & 观察"增长概率"列的概率值与颜色条 & 所有节点的增长概率在[0, 1]区间内，颜色条按阈值正确显示 \\
-    3 & 设置"增长概率$\geq$"为0.5，排序切换为"树深度$\downarrow$"，点击"查询" & 返回结果中所有节点增长概率均$\geq$0.5，按树深度降序排列 \\
-    4 & 清除筛选条件，分别观察树深度较小（$\leq$2）和较大（$\geq$5）的节点的增长概率 & 短路径和长路径节点均有有效概率值（非空、在[0, 1]区间内），IHPE模型对不同长度路径均正常输出 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
+    \hline
+    1 & 切换至"传播延续"页面，选择同一棵评论树，点击"重绘" & 页面渲染树形结构，连边颜色与粗细反映2跳增长概率：红色粗线表示高增长概率、橙色中等线表示中等概率、浅灰细线表示低概率 \\
+    \hline
+    2 & 观察根节点的出边颜色与粗细 & 根节点到多个一级回复的边多为红色粗线，表明这些路径的起始段具有较高的传播延续概率 \\
+    \hline
+    3 & 沿讨论链追踪连边颜色的变化趋势 & 部分路径从红色逐步过渡到橙色再到灰色，反映传播延续能力随路径深度递减；另有路径持续保持红色或橙色延伸至较深层级，表示讨论链具有较强的延续动能 \\
+    \hline
+    4 & 对比不同分支的边颜色模式 & 短分支以灰色细线为主，讨论在浅层终止；长分支包含连续的红色或橙色边，讨论延续至较深层级，体现模型对不同讨论链传播延续能力的区分 \\
+    \hline
+    测试结果 & \multicolumn{2}{l|}{通过} \\
+    \hline
+    异\quad 常 & \multicolumn{2}{l|}{无} \\
+    \hline
   \end{tabular}
 \end{table}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{TEST/传播延续预测测试用例.png}
-  \caption{传播延续预测结果效果图}
+  \caption{传播延续预测树形可视化效果图}
   \label{fig:test_growth}
 \end{figure}
 
@@ -349,24 +336,30 @@
 
 多主体对比分析与报告生成测试用例如表\ref{tab:test_analysis}所示，对比分析效果如图\ref{fig:test_analysis}所示。
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \caption{多主体对比分析与报告生成测试用例}
   \label{tab:test_analysis}
   \renewcommand\arraystretch{1.3}
   \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
+  \begin{tabular}{|>{\centering\arraybackslash}m{1.5cm}|>{\raggedright\arraybackslash}m{5.2cm}|>{\raggedright\arraybackslash}m{5.8cm}|}
+    \hline
     序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
+    \hline
     1 & 确认数据集已完成评估，在"数据管理"页面点击该数据集操作列的蓝色"分析"按钮 & 系统按主体类型分层计算三个维度的统计量，调用LLM后端生成分析报告，弹出成功提示显示两类主体的评论数量 \\
+    \hline
     2 & 切换至"对比分析"页面，选择该数据集，点击"加载"按钮 & 页面显示8张关键指标卡片：Human/Agent评论数、双方传播价值评分均值、双方增长概率均值、双方正面情感概率均值 \\
+    \hline
     3 & 查看传播价值评分分布与2跳增长概率分布对比图 & 分组柱状图以10个区间为横轴，蓝色系列Human、橙色系列Agent，各区间频次之和等于对应主体评论数 \\
+    \hline
     4 & 查看情感倾向对比图和交互类型$\times$增长概率均值图 & 情感对比图横轴为正面、中性、负面三类；交互类型图横轴为H$\to$H、H$\to$A、A$\to$H、A$\to$A \\
+    \hline
     5 & 查看"LLM多主体传播行为分析报告"区域，点击"导出文本"按钮 & 报告包含三段内容：传播价值差异、传播延续差异与交互类型影响、综合结论；点击导出后浏览器下载报告文本文件 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
+    \hline
+    测试结果 & \multicolumn{2}{l|}{通过} \\
+    \hline
+    异\quad 常 & \multicolumn{2}{l|}{无} \\
+    \hline
   \end{tabular}
 \end{table}
 
@@ -377,71 +370,10 @@
   \label{fig:test_analysis}
 \end{figure}
 
-\subsubsection{评估结果展示与管理功能测试}
-
-数据集管理功能测试用例如表\ref{tab:test_manage}所示，管理效果如图\ref{fig:test_manage}所示。
-
-\begin{table}[htbp]
-  \centering
-  \caption{数据集管理功能测试用例}
-  \label{tab:test_manage}
-  \renewcommand\arraystretch{1.3}
-  \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
-    序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 进入"数据管理"页面，查看数据集列表 & 列表显示各数据集元信息：ID、文件名、导入时间、各阶段样本量、评论树数、状态 \\
-    2 & 点击某"completed"数据集操作列的红色"删除"按钮 & 弹出确认对话框，提示此操作将级联删除所有相关数据 \\
-    3 & 在确认对话框中点击"确定" & 数据集从列表移除，关联的评论、特征、评估结果和分析报告均被级联删除 \\
-    4 & 点击"刷新"刷新列表 & 被删除数据集不再出现在列表中 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.9\textwidth]{TEST/数据集管理功能测试用例.png}
-  \caption{数据集管理效果图}
-  \label{fig:test_manage}
-\end{figure}
-
-评论树节点传播价值与边增长概率展示测试用例如表\ref{tab:test_tree}所示，展示效果如图\ref{fig:test_tree}所示。
-
-\begin{table}[htbp]
-  \centering
-  \caption{评论树节点传播价值与边增长概率展示测试用例}
-  \label{tab:test_tree}
-  \renewcommand\arraystretch{1.3}
-  \footnotesize
-  \begin{tabular}{>{\centering\arraybackslash}m{0.8cm} >{\raggedright\arraybackslash}m{5.7cm} >{\raggedright\arraybackslash}m{6cm}}
-    \toprule
-    序号 & \centering 输入及操作说明 & \centering\arraybackslash 期望测试结果 \\
-    \midrule
-    1 & 进入"评论树"页面，选择已评估数据集，在下拉框中选择一棵节点较多的评论树，点击"重绘" & 页面渲染树形结构，Human节点蓝色、Agent节点橙色，节点半径与传播价值评分成正比 \\
-    2 & 观察树中各节点的大小差异 & 高传播价值节点圆形明显更大、颜色更饱满，低传播价值节点圆形较小、颜色较淡 \\
-    3 & 观察树中连边的颜色与粗细差异 & 增长概率$\geq$阈值的边为红色粗线，$\geq$阈值$\times$0.6的边为橙色中等线，其余为浅灰细线 \\
-    4 & 调整"高亮阈值（增长概率）"数值后点击"重绘" & 阈值提高后红色高亮边减少，阈值降低后红色高亮边增多 \\
-    5 & 将鼠标悬停在某节点上，查看浮动提示信息 & 显示用户名、主体类型、传播价值评分、2跳增长概率、评论文本前120字符 \\
-    \midrule
-    \multicolumn{3}{l}{测试结果：通过\hspace{2em}异常：无} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.9\textwidth]{TEST/评论树节点传播价值与边增长概率展示测试用例.png}
-  \caption{评论树节点传播价值与边增长概率展示效果图}
-  \label{fig:test_tree}
-\end{figure}
-
 \subsection{性能测试}
 
 使用与功能测试相同的数据集（356条评论，1棵评论树）开展性能测试，通过Playwright记录各操作的端到端耗时。数据导入与预处理流水线整体耗时约5.4秒，主要开销来自BGE文本编码与情感分析两个深度学习特征提取步骤；双模型推理（Group-aware Fusion TabTransformer与IHPE）耗时约1.3秒，得益于模型在应用启动时已预加载且参数规模较小；多主体对比分析耗时约56.1秒，瓶颈在于调用本地LLM后端生成分析报告，统计聚合本身不足1秒。前端各交互操作（评估结果查询、评论树可视化渲染、对比仪表盘加载）均在1.2秒以内完成。综上，系统在中小规模数据集下各环节响应时间均处于可接受范围，满足交互式评估分析的使用需求。
 
 \section{本章小结}
 
-本章在第三章系统设计的基础上，阐述了多主体信息认知传播评估系统六个功能模块从数据预处理、存储、模型推理到对比分析与可视化展示的具体实现方案。功能测试与性能测试结果表明，系统端到端流程正确，各环节响应效率满足交互式分析的使用需求。
+本章在第三章系统设计的基础上，阐述了多主体信息传播影响力评估系统六个功能模块从数据预处理、存储、模型推理到对比分析与可视化展示的具体实现方案。功能测试与性能测试结果表明，系统端到端流程正确，各环节响应效率满足交互式分析的使用需求。
