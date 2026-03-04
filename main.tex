@@ -1,6 +1,6 @@
-%\documentclass[master,eng,fulltime,electronic,cenhdr,normaltoc,blind]{buptthesis} % 专硕电子版
+\documentclass[master,eng,fulltime,electronic,cenhdr,normaltoc,blind]{buptthesis} % 专硕电子版
 %\documentclass[master,phil,fulltime,print,cenhdr,normaltoc]{buptthesis} % 学硕印刷版
-\documentclass[master,eng,fulltime,electronic,cenhdr,normaltoc]{buptthesis} % 专硕电子版
+%\documentclass[master,eng,fulltime,electronic,cenhdr,normaltoc]{buptthesis} % 专硕电子版
 %\documentclass[master,eng,fulltime,print,cenhdr,normaltoc]{buptthesis} % 专硕印刷版
 %\documentclass[phd,phil,fulltime,electronic,cenhdr,normaltoc]{buptthesis} % 学博电子版
 %\documentclass[phd,phil,fulltime,print,cenhdr,normaltoc]{buptthesis} % 学博印刷版
@@ -63,11 +63,11 @@
 
 \BUPTthesisentitlepage{%
 	confidentialEN = {Public},  % 目前只支持公开
-	titleEN = {Thesis \\ Title}, % 本章标题
-	nameEN = {Your Name}, % 姓名
-	majorEN = {Your Major}, % 专业名称
-	supervisorEN = {Your Boss}, % 导师姓名
-	instituteEN = {Your Institute} % 学院名称
+	titleEN = {Design and Implementation of Multi-Agent \\ Information Propagation Influence Assessment System}, % 本章标题
+	nameEN = {Jia Zhiyuan}, % 姓名
+	majorEN = {Computer Technology}, % 专业名称
+	supervisorEN = {Cheng Bo}, % 导师姓名
+	instituteEN = {School of Computer Science\\(National Pilot Software Engineering School), BUPT} % 学院名称
 	%instituteEN = {Your Institute1\\Your Institute2} % 双行学院的写法
 }
 
@@ -95,7 +95,7 @@
 \include{Chapter/Chapter_cnabstract} % 中文摘要
 \include{Chapter/Chapter_enabstract} % 英文摘要
 \tableofcontents % 目录
-\include{Chapter/Chapter_nomeclature} % 符号表
+%\include{Chapter/Chapter_nomeclature} % 符号表
 % \listoffigures % NOTE:20230103旧模板
 % \listoftables % NOTE:20230103旧模板
 
@@ -115,7 +115,7 @@
 }
 
 \backmatter
-\include{Chapter/Chapter_abbreviation} % 缩写附录
+%\include{Chapter/Chapter_abbreviation} % 缩写附录
 \ifWithOptionBlind \else
 \include{Chapter/Chapter_acknowledgement} % 致谢
 \fi
