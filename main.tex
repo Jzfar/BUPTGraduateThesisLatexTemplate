@@ -54,11 +54,11 @@
 
 \BUPTdateOptions{%
     pageYear = {2026}, % 封面上面的年
-    pageMonth = {6}, % 封面上面的月
-    pageDay = {30}, % 封面上面的天
-    dissertationYear = {}, % 答辩时间的年
-    dissertationMonth = {}, % 答辩时间的月
-    dissertationDay = {} % 答辩时间的天
+    pageMonth = {5}, % 封面上面的月
+    pageDay = {23}, % 封面上面的天
+    dissertationYear = {2026}, % 答辩时间的年
+    dissertationMonth = {5}, % 答辩时间的月
+    dissertationDay = {23} % 答辩时间的天
 }
 
 \BUPTthesisentitlepage{%
@@ -72,18 +72,24 @@
 }
 
 \BUPTdissertationcommitteepage{%
-	committeeChairName = {}, % 主席名称
-	committeeChairTitle = {}, % 主席职称
-	committeeChairOrgan = {}, % 主席单位
-	committeeMemberFirstName = {}, % 委员1名称
-	committeeMemberFirstTitle = {},
-	committeeMemberFirstOrgan = {},
-	committeeMemberSecondName = {},
-	committeeMemberSecondTitle = {},
-	committeeMemberSecondOrgan = {},
-	committeeSecretaryName = {}, % 秘书名称
-	committeeSecretaryTitle = {},
-	committeeSecretaryOrgan = {},
+	committeeChairName = {吴步丹}, % 主席名称
+	committeeChairTitle = {副教授}, % 主席职称
+	committeeChairOrgan = {北京邮电大学}, % 主席单位
+	committeeMemberFirstName = {程渤}, % 委员1名称
+	committeeMemberFirstTitle = {教授},
+	committeeMemberFirstOrgan = {北京邮电大学},
+	committeeMemberSecondName = {李常宝},
+	committeeMemberSecondTitle = {研究员},
+	committeeMemberSecondOrgan = {中国电科第十五研究所},
+	committeeMemberThirdName = {王国伟},
+	committeeMemberThirdTitle = {高级工程师},
+	committeeMemberThirdOrgan = {中国电子科技集团有限公司},
+	committeeMemberFourthName = {},
+	committeeMemberFourthTitle = {},
+	committeeMemberFourthOrgan = {},
+	committeeSecretaryName = {陈勇}, % 秘书名称，电话：13810427976
+	committeeSecretaryTitle = {副教授},
+	committeeSecretaryOrgan = {北京邮电大学},
 }
 % 最多支持四个委员，分别从First->Fourth，不指定参数就为空
 
@@ -119,8 +125,9 @@
 \ifWithOptionBlind \else
 \include{Chapter/Chapter_acknowledgement} % 致谢
 \fi
-% 创新成果暂时隐去（匿名版与常规版均不输出）；恢复时取消下方注释
-%\include{Chapter/Chapter_publication} % 创新成果
+\ifWithOptionBlind \else
+\include{Chapter/Chapter_publication} % 创新成果
+\fi
 \ifWithOptionBlind \else
 \include{Chapter/Chapter_experience} % 作者学习经历
 \fi

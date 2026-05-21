@@ -691,6 +691,8 @@
     {\heiti \zihao{3} \BUPT@label@committeelist} \par
   \end{center}
 
+  \let\BUPT@value@committeeMemberFourthNameRaw\BUPT@value@committeeMemberFourthName
+
   \ifBUPT@option@blind
     \def\BUPT@value@committeeChairName{\@empty}
     \def\BUPT@value@committeeChairTitle{\@empty}
@@ -715,7 +717,7 @@
   \begin{table*}[htbp]
     \centering
     \renewcommand\arraystretch{1.5}
-    \begin{tabular}{|>{\centering\arraybackslash}m{2cm} | >{\centering\arraybackslash}m{2cm} | >{\centering\arraybackslash}m{2cm} | >{\centering\arraybackslash}m{6.5cm}|}
+    \begin{tabular}{|>{\centering\arraybackslash}m{2cm} | >{\centering\arraybackslash}m{1.85cm} | >{\centering\arraybackslash}m{2.6cm} | >{\centering\arraybackslash}m{6.05cm}|}
       \hline
       职务   & 姓\quad 名                                                                                                          & 职\quad  称                              & 工\quad  作\quad  单\quad  位              \\
       \hline
@@ -727,8 +729,10 @@
       \hline
       委员   & \BUPT@value@committeeMemberThirdName                                                                              & \BUPT@value@committeeMemberThirdTitle  & \BUPT@value@committeeMemberThirdOrgan  \\
       \hline
+      \ifx\BUPT@value@committeeMemberFourthNameRaw\@empty \else
       委员   & \BUPT@value@committeeMemberFourthName                                                                             & \BUPT@value@committeeMemberFourthTitle & \BUPT@value@committeeMemberFourthOrgan \\
       \hline
+      \fi
       秘书   & \BUPT@value@committeeSecretaryName                                                                                & \BUPT@value@committeeSecretaryTitle    & \BUPT@value@committeeSecretaryOrgan    \\
       \hline
       答辩日期 & \multicolumn{3}{c|}{\BUPT@value@dissertationYear 年 \BUPT@value@dissertationMonth 月 \BUPT@value@dissertationDay 日}                                                                                   \\

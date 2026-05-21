@@ -32,7 +32,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\textwidth]{G6-1/图6-1 数据导入与预处理模块流程图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G6-1/图6-1 数据导入与预处理模块流程图.cropped.pdf}
   \caption{数据导入与预处理模块流程图}
   \label{fig:import_flow}
 \end{figure}
@@ -61,7 +61,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{G6-2/图6-2 数据存储模块类图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G6-2/图6-2 数据存储模块类图.cropped.pdf}
   \caption{数据存储模块类图}
   \label{fig:orm_class}
 \end{figure}
@@ -112,7 +112,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{G6-3/图6-3 评估子系统类图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G6-3/图6-3 评估子系统类图.cropped.pdf}
   \caption{评估子系统类图}
   \label{fig:eval_class}
 \end{figure}
@@ -147,7 +147,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{G6-4/图6-4 多主体对比分析模块时序图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G6-4/图6-4 多主体对比分析模块时序图.cropped.pdf}
   \caption{多主体对比分析模块时序图}
   \label{fig:analysis_seq}
 \end{figure}
@@ -180,11 +180,11 @@
 
 该功能支持将多主体对比统计数据和评估结果列表导出为CSV格式。
 
-评估结果展示与管理模块的核心交互时序如图\ref{fig:display_seq}所示，以"评估结果查询后跳转评论树可视化"场景为例展示前后端交互流程。用户在查询面板设置筛选条件（主体类型、评分区间、概率区间等）后，前端向GET /api/comments接口发送请求，QueryRouter通过Comment、EvaluationResult与CommentFeature三表左连接查询并应用筛选、排序与分页条件，返回评论列表；用户点击某条结果后，前端携带根节点ID请求GET /api/tree/\{root\_tweet\_id\}接口，TreeRouter加载该评论树全部节点及对应的评估结果，通过\_build\_tree()递归构建嵌套的树节点结构（每个节点包含评论ID、主体类型、传播价值评分、增长概率及子节点列表）返回前端，前端基于D3.js渲染树形可视化视图，完成从列表到图表的跳转交互。
+评估结果展示与管理模块的核心交互时序如图\ref{fig:display_seq}所示，以"评估结果查询后跳转评论树可视化"场景为例展示前后端交互流程。用户在查询面板设置筛选条件（主体类型、评分区间、概率区间等）后，前端向GET /api/comments接口发送请求，QueryRouter通过Comment、EvaluationResult与CommentFeature三表左连接查询并应用筛选、排序与分页条件，返回评论列表；用户点击某条结果后，前端携带根节点ID请求GET /api/tree/\{root\_tweet\_id\}接口，TreeRouter加载该评论树全部节点及对应的评估结果，通过\_build\_tree\_dict()迭代构建嵌套的树节点结构（每个节点包含评论ID、主体类型、传播价值评分、增长概率及子节点列表）返回前端，前端基于D3.js渲染树形可视化视图，完成从列表到图表的跳转交互。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{G6-5/图6-5 评估结果展示与管理模块交互时序图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G6-5/图6-5 评估结果展示与管理模块交互时序图.cropped.pdf}
   \caption{评估结果展示与管理模块交互时序图}
   \label{fig:display_seq}
 \end{figure}
@@ -225,7 +225,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{TEST/综合评估结果排序功能测试.png}
+  \includegraphics[width=\textwidth]{TEST/综合评估结果排序功能测试.png}
   \caption{综合评估结果排序效果图}
   \label{fig:test_rank}
 \end{figure}
@@ -238,7 +238,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{TEST/评论传播价值评估测试用例.png}
+  \includegraphics[width=\textwidth]{TEST/评论传播价值评估测试用例.png}
   \caption{评论传播价值评估树形可视化效果图}
   \label{fig:test_value}
 \end{figure}
@@ -251,7 +251,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{TEST/传播延续预测测试用例.png}
+  \includegraphics[width=\textwidth]{TEST/传播延续预测测试用例.png}
   \caption{传播延续预测树形可视化效果图}
   \label{fig:test_growth}
 \end{figure}
@@ -264,7 +264,7 @@
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{TEST/多主体对比分析与报告生成测试用例.png}
+  \includegraphics[width=\textwidth]{TEST/多主体对比分析与报告生成测试用例.png}
   \caption{多主体对比分析与报告生成效果图}
   \label{fig:test_analysis}
 \end{figure}

@@ -61,7 +61,7 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.85\textwidth]{G3-2/label_timeline.png}
+  \includegraphics[width=\textwidth]{G3-2/label_timeline.png}
   \caption{时间窗口与标签定义示意图}
   \label{fig:label_timeline}
 \end{figure}
@@ -74,7 +74,7 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.9\textwidth]{G3-3/图3.x-GFTabTransformer模型整体结构示意图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G3-3/图3.x-GFTabTransformer模型整体结构示意图.cropped.pdf}
   \caption{Group-aware Fusion TabTransformer模型结构图}
   \label{fig:model_arch}
 \end{figure}
@@ -85,7 +85,7 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 \textbf{（2）门控融合阶段}：通过门控融合机制计算样本级别的特征组权重$\boldsymbol{\alpha} = (\alpha_1, \ldots, \alpha_n)$，并据此对组token进行加权求和，生成融合表示$\mathbf{e}_{\text{fused}}$。该阶段使模型能够根据每个样本的具体特征分布，自适应地调整各特征组的贡献权重。
 
-\textbf{（3）Transformer编码阶段}：将所有组token与融合token拼接为序列$[\mathbf{e}_1; \ldots; \mathbf{e}_n; \mathbf{e}_{\text{fused}}]$，输入Transformer编码器进行深层特征交互。通过多头自注意力机制，模型能够捕捉不同特征组之间的复杂依赖关系。
+\textbf{（3）Transformer编码阶段}：将所有组token与融合token拼接后输入Transformer编码器进行深层特征交互。拼接序列记为$[\mathbf{e}_1; \ldots; \mathbf{e}_n; \mathbf{e}_{\text{fused}}]$。通过多头自注意力机制，模型能够捕捉不同特征组之间的复杂依赖关系。
 
 \textbf{（4）分类预测阶段}：从Transformer编码器的输出中提取最终表示，经多层感知机（MLP）分类头输出预测logits，通过Sigmoid函数转换为传播价值评分。
 
@@ -101,11 +101,11 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 \textbf{（2）G2文本语义特征}
 
-文本语义特征通过预训练语言模型提取评论文本的深层语义表示。以评论原始文本为输入，使用BAAI/bge-base-en-v1.5模型进行编码，该模型基于BERT架构、专为文本嵌入任务优化，输出768维稠密向量。该特征组捕捉评论的语义内容、表达方式和话题相关性，是判断评论传播价值的核心信号之一。
+文本语义特征通过预训练语言模型提取评论文本的深层语义表示。以评论原始文本为输入，使用BAAI/\allowbreak bge-base-en-v1.5模型进行编码，该模型基于BERT架构、专为文本嵌入任务优化，输出768维稠密向量。该特征组捕捉评论的语义内容、表达方式和话题相关性，是判断评论传播价值的核心信号之一。
 
 \textbf{（3）G3情感特征}
 
-情感特征量化评论文本的情感倾向。以评论原始文本为输入，使用cardiffnlp/twitter-roberta-base-sentiment-latest模型进行分析，该模型基于RoBERTa架构、在Twitter数据上微调\cite{barbieri2020tweeteval}，适用于社交媒体文本的情感分析，输出三维概率向量$(p_{\text{pos}}, p_{\text{neu}}, p_{\text{neg}})$，分别表示正面、中性、负面情感的概率，满足$p_{\text{pos}} + p_{\text{neu}} + p_{\text{neg}} = 1$。情感特征反映评论的情绪色彩，已有研究表明情感极性与社交媒体内容的传播效果存在显著关联\cite{stieglitz2013emotions,tsugawa2017sentiment}。
+情感特征量化评论文本的情感倾向。以评论原始文本为输入，使用cardiffnlp/\allowbreak twitter-roberta-base-sentiment-latest模型进行分析，该模型基于RoBERTa架构、在Twitter数据上微调\cite{barbieri2020tweeteval}，适用于社交媒体文本的情感分析，输出三维概率向量$(p_{\text{pos}}, p_{\text{neu}}, p_{\text{neg}})$，分别表示正面、中性、负面情感的概率，满足$p_{\text{pos}} + p_{\text{neu}} + p_{\text{neg}} = 1$。情感特征反映评论的情绪色彩，已有研究表明情感极性与社交媒体内容的传播效果存在显著关联\cite{stieglitz2013emotions,tsugawa2017sentiment}。
 
 \textbf{（4）G4主体标识特征}
 
@@ -364,6 +364,7 @@ Recall@P（固定精确率下的召回率）定义为在Precision-Recall曲线�
   \label{tab:ablation}
   \renewcommand\arraystretch{1.5}
   \footnotesize
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{>{\centering\arraybackslash}m{1.8cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm} >{\centering\arraybackslash}m{1cm}}
     \toprule
     \multirow{2}{*}{Model} & \multicolumn{3}{c}{Overall} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
@@ -379,7 +380,7 @@ Recall@P（固定精确率下的召回率）定义为在Precision-Recall曲线�
 
 通过表\ref{tab:ablation}的消融实验结果可以看出，门控融合机制与主体标识特征均对模型性能具有正向贡献，且二者的作用维度有所不同。将门控权重替换为均匀权重（Mean Fusion）后，整体AUC-PR仅从0.422微降至0.421，但在分主体视角下差异更为显著：A-Recall@P=0.8从0.100下降至0.078（降幅22\%），H-Recall@P=0.8从0.024降至0.017（降幅29\%），而A-AUC-PR基本持平（0.621 vs 0.619）。这表明门控融合机制的价值主要体现在高精度筛选场景下——通过样本级自适应权重分配，提升模型在不同主体子群体上的精细化识别能力。相比固定平均融合，门控融合能够根据样本差异调整发布环境、文本语义、情感倾向和主体标识的相对贡献，这与多主体评论样本内部异质性较强的任务特点相匹配。
 
-去除G4后，整体AUC-PR下降至0.418，Recall@P=0.5从0.215降至0.196；更关键的是分主体表现的分化：A-AUC-PR从0.621降至0.608（降幅2.1\%），A-Recall@P=0.5从0.853骤降至0.691（降幅19.0\%），A-Recall@P=0.8从0.100骤降至0.035（降幅65\%），而human子集各指标基本持平。这说明G4是模型区分和捕捉agent传播行为模式的核心信号——缺少主体标识后，模型无法有效识别agent评论中的高传播价值样本，验证了在多主体场景下显式引入主体类型特征的必要性。结合基线对比和消融结果可以看出，本章方法的主要贡献不在于增加通用模型复杂度，而在于针对人类用户与AI代理共存场景构建了主体感知的组级融合机制，使模型能够在同一预测框架下同时利用内容特征与主体差异信息。
+去除G4后，整体AUC-PR下降至0.418，Recall@P=0.5从0.215降至0.196；分主体指标下降更明显：A-AUC-PR从0.621降至0.608，A-Recall@P=0.5从0.853降至0.691，A-Recall@P=0.8从0.100降至0.035，而human子集基本持平。这说明G4是捕捉agent传播行为模式的核心信号，缺少主体标识会显著削弱agent高传播价值样本识别能力。结合基线对比和消融结果，本章方法的主要贡献在于面向人类用户与AI代理共存场景构建主体感知的组级融合机制，而非单纯增加通用模型复杂度。
 
 \section{本章小结}
 

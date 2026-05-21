@@ -50,14 +50,14 @@ y_k = \begin{cases}
   \caption{路径边异构交互类型定义与传播特征假设}
   \label{tab:interaction_type}
   \renewcommand\arraystretch{1.5}
-  \begin{tabular}{>{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{6cm}}
+  \begin{tabular}{>{\centering\arraybackslash}m{1.8cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{7cm}}
     \toprule
-    交互类型 & 符号 & 含义 & 传播特征假设 \\
+    交互类型 & 含义 & 传播特征假设 \\
     \midrule
-    Human$\to$Human & H$\to$H & 人类回复人类 & 自然讨论，传播延续取决于话题热度 \\
-    Human$\to$Agent & H$\to$A & 人类回复AI & 可能是质疑/追问AI，易引发后续讨论 \\
-    Agent$\to$Human & A$\to$H & AI回复人类 & AI响应后人类可能继续追问 \\
-    Agent$\to$Agent & A$\to$A & AI回复AI & 较少见，传播模式待观察 \\
+    H$\to$H & 人类回复人类 & 自然讨论，传播延续取决于话题热度 \\
+    H$\to$A & 人类回复AI & 可能是质疑/追问AI，易引发后续讨论 \\
+    A$\to$H & AI回复人类 & AI响应后人类可能继续追问 \\
+    A$\to$A & AI回复AI & 较少见，传播模式待观察 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -68,7 +68,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.9\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
   \caption{交互感知的异构路径编码器（IHPE）整体结构}
   \label{fig:ihpe_arch}
 \end{figure}
@@ -129,7 +129,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.9\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
+  \includegraphics[width=\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
   \caption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}
   \label{fig:interact_encode}
 \end{figure}
@@ -351,6 +351,7 @@ IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提�
   \label{tab:ch5_ablation}
   \renewcommand\arraystretch{1.5}
   \footnotesize
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm}}
     \toprule
     消融变体 & AUC-PR & $\Delta$ & R@P0.5 & $\Delta$ & R@P0.8 & $\Delta$ \\
