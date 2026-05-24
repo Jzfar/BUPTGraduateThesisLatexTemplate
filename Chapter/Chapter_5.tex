@@ -103,7 +103,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 \mathbf{e}_{\text{type}}^{(i)} = \text{Embedding}_{\text{type}}(a_i) \in \mathbb{R}^{d_{\text{type}}}
 \end{equation}
 
-其中$a_i \in \{0, 1\}$为主体类型（Human/Agent），$d_{\text{type}}$为类型嵌入维度（默认取16）。
+其中$a_i \in \{0, 1\}$为节点$v_i$的主体类型编码，$a_i=0$表示Human，$a_i=1$表示Agent；$d_{\text{type}}$为类型嵌入维度（默认取16），因此主体类型嵌入表的大小为$2 \times d_{\text{type}}$。
 
 \textbf{（3）特征拼接与共享投影}
 
@@ -129,7 +129,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
+  \includegraphics[width=0.86\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
   \caption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}
   \label{fig:interact_encode}
 \end{figure}
@@ -142,7 +142,7 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 \end{equation}
 
-对应四种交互类型：H$\to$H, H$\to$A, A$\to$H, A$\to$A。
+其中$a_{i-1}$表示父节点$v_{i-1}$的主体类型，$a_i$表示当前节点$v_i$的主体类型，0表示Human，1表示Agent。因此，$(0,0)$、$(0,1)$、$(1,0)$、$(1,1)$分别对应H$\to$H、H$\to$A、A$\to$H、A$\to$A四种交互类型。
 
 \textbf{（2）交互类型嵌入}
 
@@ -160,7 +160,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 \mathbf{x}'_i = \mathbf{x}_i + \mathbf{W}_{\text{fuse}} \mathbf{e}_{\text{interact}}^{(i)}
 \end{equation}
 
-对于根节点（$i=0$），使用特殊的[ROOT]交互类型嵌入。
+其中$\mathbf{x}_i \in \mathbb{R}^{d}$为主体感知节点表示，$\mathbf{e}_{\text{interact}}^{(i)} \in \mathbb{R}^{d}$为第$i$个节点入边对应的交互类型嵌入，$\mathbf{W}_{\text{fuse}} \in \mathbb{R}^{d \times d}$为融合矩阵，输出$\mathbf{x}'_i \in \mathbb{R}^{d}$为交互增强后的节点表示。对于根节点（$i=0$），由于不存在父节点，使用特殊的[ROOT]交互类型嵌入。
 
 交互类型编码使模型能够区分"Human回复Agent"与"Agent回复Human"等不同场景，对理解多主体传播动态至关重要。该组件有效的关键在于参数极少（$5 \times d = 640$个参数）且不受Agent样本稀疏的制约：H$\to$H边占路径样本的绝大多数，为嵌入表提供充足的训练信号；含Agent的边类型（H$\to$A、A$\to$H、A$\to$A）通过与H$\to$H嵌入的对比获得区分性表示，无需大量独立参数即可建模异构交互。
 
@@ -218,7 +218,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 \subsection{数据集}
 
-本章使用与第四章\ref{sec:dataset}节相同的X平台原始数据集（255,754条评论）重构评论树，但不对空文本节点进行过滤。本章的2跳标签由评论树结构与时间戳决定，文本缺失不影响标签有效性；同时，路径级任务中移除中间节点会导致其所有后代节点的路径需要重构，保留空文本节点以维护路径结构完整性，该节点的文本特征以零向量表示。在此基础上进行右删失过滤：移除观测截止时间（$t_{\text{obs}}$）缺失的样本（无法判断随访时长）以及随访时长不足12小时（$A < T$）的样本（$y=0$含义不明确），右删失过滤策略与第四章保持一致。
+本章使用与第四章\ref{sec:dataset}节相同的某社交平台原始数据集（255,754条评论）重构评论树，但不对空文本节点进行过滤。本章的2跳标签由评论树结构与时间戳决定，文本缺失不影响标签有效性；同时，路径级任务中移除中间节点会导致其所有后代节点的路径需要重构，保留空文本节点以维护路径结构完整性，该节点的文本特征以零向量表示。在此基础上进行右删失过滤：移除观测截止时间（$t_{\text{obs}}$）缺失的样本（无法判断随访时长）以及随访时长不足12小时（$A < T$）的样本（$y=0$含义不明确），右删失过滤策略与第四章保持一致。
 
 原始数据集包含255,754个节点，经移除$t_{\text{obs}}$缺失样本（$-64{,}631$）和随访时长不足12小时的样本（$-24{,}580$）后，最终保留166,543个节点用于模型训练与评估。正例率从原始数据集的10.01\%升至11.33\%，印证了右删失样本对$y=0$的污染：被截断观测的节点在12h内未积累到2跳，被错误标记为负例。过滤后数据集的统计信息与标签分布如表\ref{tab:ch5_dataset}所示。
 
@@ -240,7 +240,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
   \end{tabular}
 \end{table}
 
-需要指出的是，本章数据集与第四章同源，因此同样存在平台来源和主体覆盖范围的限制。用于传播延续预测的数据中Agent节点为3,488个，占比约2.09\%，明显少于Human节点；同时，AI主体仍主要对应X平台上的Grok账号。上述不平衡分布反映了当前平台实际采样条件，也使得模型需要在Agent样本相对稀疏的情况下学习异构交互模式。实验结果能够说明本文方法在当前X平台Grok参与讨论场景下的有效性，但对于其他社交平台、其他AI代理类型以及更均衡的人机互动数据，还需要进一步开展跨平台和多主体扩展验证。
+需要指出的是，本章数据集与第四章同源，因此同样存在平台来源和主体覆盖范围的限制。用于传播延续预测的数据中Agent节点为3,488个，占比约2.09\%，明显少于Human节点；同时，AI主体仍主要对应某社交平台上的AI代理A账号。上述不平衡分布反映了当前平台实际采样条件，也使得模型需要在Agent样本相对稀疏的情况下学习异构交互模式。实验结果能够说明本文方法在当前单一平台AI代理参与讨论场景下的有效性，但对于其他社交平台、其他AI代理类型以及更均衡的人机互动数据，还需要进一步开展跨平台和多主体扩展验证。
 
 \subsection{数据划分}
 
@@ -285,6 +285,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
   \caption{各模型整体性能对比}
   \label{tab:ch5_overall}
   \renewcommand\arraystretch{1.5}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm}}
     \toprule
     模\quad 型 & AUC-PR（主指标） & R@P0.5 & R@P0.8 \\
@@ -308,7 +309,7 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
   \caption{各模型分主体性能对比}
   \label{tab:ch5_peragent}
   \renewcommand\arraystretch{1.5}
-  \footnotesize
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm}}
     \toprule
     \multirow{2}{*}{模\quad 型} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\
