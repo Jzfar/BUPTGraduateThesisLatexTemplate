@@ -792,10 +792,16 @@
   \begin{center}
     {\zihao{3}\heiti\centering\BUPT@label@abstract}
   \end{center}\par
-  \zihao{4}
   \vspace{1ex}
+  \begingroup
+  \normalfont\songti\rmfamily
+  \linespread{1}\fontsize{14bp}{20bp}\selectfont
+  \setlength{\parindent}{2em}
+  \setlength{\parskip}{0pt}
+  \leftskip=0pt
+  \rightskip=0pt
 }%
-{}
+{\par\endgroup}
 \def\cnkeywords#1{%
   \vspace{2ex}{\bfseries\BUPT@label@keywords}#1}
 
