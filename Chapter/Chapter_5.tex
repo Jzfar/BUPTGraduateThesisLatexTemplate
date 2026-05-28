@@ -66,7 +66,8 @@ y_k = \begin{cases}
 
 IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分类预测"的五阶段架构，以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入单元，端到端预测节点$v_k$的传播延续概率。模型整体结构如图\ref{fig:ihpe_arch}所示。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
   \caption{交互感知的异构路径编码器（IHPE）整体结构}
@@ -127,7 +128,8 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 
 图\ref{fig:interact_encode}以路径$P=[v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例，展示了本层对路径上所有节点的完整编码过程。对路径上每个节点$v_i$，依据其入边的主体类型组合确定交互类型$e_i$（根节点$v_0$取特殊[ROOT]类型，其余节点取$(a_{i-1}, a_i)$对应的四类之一），查询嵌入表后通过残差融合注入节点表示，输出交互增强表示$\mathbf{x}'_i$。路径中$v_1$（H$\to$A）与$v_3$（H$\to$A）共享同一嵌入向量$\mathbf{e}_{\text{H} \to \text{A}}$，体现了嵌入参数的高效复用。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.86\textwidth]{G4-2/图4-2 交互类型编码层机制图.cropped.pdf}
   \caption{交互类型编码层机制示意（以路径$P = [v_0(\text{H}), v_1(\text{A}), v_2(\text{H}), v_3(\text{A})]$为例）}

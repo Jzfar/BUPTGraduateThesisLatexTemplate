@@ -29,7 +29,8 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 此外，本数据集的覆盖范围具有明确边界。数据来源集中于某社交平台，AI代理主体为AI代理A，且Human与Agent样本数量存在不平衡（97.83\%/2.17\%）。这一设置与本文关注的单一平台人类用户和AI代理共存场景相匹配，也有助于在相对可控的主体设定下分析多主体传播差异；但实验结论仍应主要解释为该平台和该AI主体条件下的结果，其跨平台、多AI代理类型以及更均衡样本分布下的泛化能力仍需后续数据验证。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{G3-4/T_selection_dual_axis.png}
   \caption{正例覆盖度与删失率随T变化的双轴对比图}
@@ -44,7 +45,8 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 图\ref{fig:pipeline}展示了本任务的完整物理流程，涵盖从某社交平台多主体数据采集、数据清洗、特征工程到模型推理的端到端过程。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G3-1-latex/fig_3x_pipeline.pdf}
   \caption{评论传播价值评估任务全流程示意图}
@@ -61,7 +63,8 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 上述标签定义对应三类典型样本情形，如图\ref{fig:label_timeline}所示。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G3-2/label_timeline.png}
   \caption{时间窗口与标签定义示意图}
@@ -74,7 +77,8 @@ $T$的选择需要同时平衡两个指标：正例覆盖度（即被回复的�
 
 本文提出的Group-aware Fusion TabTransformer模型采用"组投影—门控融合—Transformer编码—分类预测"的四阶段架构，旨在充分利用异构特征组的互补信息，实现对评论传播价值的准确评估。模型整体结构如图\ref{fig:model_arch}所示。
 
-\begin{figure}[htbp]
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G3-3/图3.x-GFTabTransformer模型整体结构示意图.cropped.pdf}
   \caption{Group-aware Fusion TabTransformer模型结构图}
