@@ -30,6 +30,7 @@
 
 数据导入与预处理模块的处理流程如图\ref{fig:import_flow}所示，对应run\_import\_pipeline()函数的七步流水线。系统接收JSON文件后创建导入任务记录（标记为处理中），随后依次执行：格式校验（检查11个必要字段是否完整，不通过则终止并标记为失败）、评论ID去重、质量过滤（剔除采集时间缺失样本，标记空文本节点为传播价值评估不可用）、右删失过滤（剔除随访时间$A<T$的样本）、评论树结构重构（BFS计算节点深度与所属根节点）、特征提取（BGE文本编码、情感分析、发布环境特征）。最后执行数据库写入，跳过已存在的评论ID以支持跨导入去重，批量写入Comment与CommentFeature表，完成后更新各阶段计数并标记为已完成。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G6-1/图6-1 数据导入与预处理模块流程图.cropped.pdf}
@@ -59,6 +60,7 @@
 
 数据存储模块的ORM模型类结构如图\ref{fig:orm_class}所示。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G6-2/图6-2 数据存储模块类图.cropped.pdf}
@@ -110,6 +112,7 @@
 
 特征组装与路径构造逻辑分别内联于\_run\_tab\_transformer()（组装G1发布环境、G2文本语义、G3情感倾向、G4主体标识四组特征）和\_run\_ihpe()（按深度排序构建根到目标路径并利用父路径缓存计算交互类型编码）中，从数据存储模块读取预提取特征并转换为模型所需的输入格式。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G6-3/图6-3 评估子系统类图.cropped.pdf}
@@ -145,6 +148,7 @@
 
 多主体对比分析模块的交互时序如图\ref{fig:analysis_seq}所示，展示了从触发分析到报告生成的完整协作流程。API路由层首先校验导入任务是否存在且评估结果是否已生成，随后将请求委派至analysis\_service模块的run\_analysis()函数；该函数联表查询Comment、CommentFeature与EvaluationResult后，按主体类型将数据分为Human子集和Agent子集，依次调用\_compute\_group\_stats()计算两个子集在传播价值、传播延续和情感倾向三个维度的分布统计量（均值、中位数、四分位数），再调用\_compute\_interaction\_stats()根据评论树父子关系动态计算各交互类型（H$\to$H / H$\to$A / A$\to$H / A$\to$A）下的2跳增长概率均值。最后调用\_generate\_llm\_report()将统计结果填入固定提示词模板并通过OpenAI-compatible API请求LLM后端生成三段式自然语言分析报告，统计数据与报告文本一并写入AnalysisReport表。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G6-4/图6-4 多主体对比分析模块时序图.cropped.pdf}
@@ -182,6 +186,7 @@
 
 评估结果展示与管理模块的核心交互时序如图\ref{fig:display_seq}所示，以"评估结果查询后跳转评论树可视化"场景为例展示前后端交互流程。用户在查询面板设置筛选条件（主体类型、评分区间、概率区间等）后，前端向GET /api/comments接口发送请求，QueryRouter通过Comment、EvaluationResult与CommentFeature三表左连接查询并应用筛选、排序与分页条件，返回评论列表；用户点击某条结果后，前端携带根节点ID请求GET /api/tree/\{root\_tweet\_id\}接口，TreeRouter加载该评论树全部节点及对应的评估结果，通过\_build\_tree\_dict()迭代构建嵌套的树节点结构（每个节点包含评论ID、主体类型、传播价值评分、增长概率及子节点列表）返回前端，前端基于D3.js渲染树形可视化视图，完成从列表到图表的跳转交互。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{G6-5/图6-5 评估结果展示与管理模块交互时序图.cropped.pdf}
@@ -199,7 +204,8 @@
   \centering
   \caption{测试环境配置}
   \label{tab:test_env}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{7cm}}
     \toprule
     类\quad 别 & 项\quad 目 & 配\quad 置 \\
@@ -225,6 +231,7 @@
 
 页面顶部提供多维筛选与排序控件：用户可分别设置"传播价值$\geq$"和"增长概率$\geq$"两个阈值对评论进行过滤，通过主体类型下拉框（全部/Human/Agent）筛选目标群体，并配置传播价值与增长概率的权重比例（默认1:1）以调整综合评分的计算方式。点击查询后，列表按综合评分（两项指标的加权平均）降序排列，每行展示主体类型标签、用户标识、评论内容摘要、传播价值评分（绿色渐变条）、增长概率（黄色渐变条）、情感概率分布（正/中/负）及发布时间。如图\ref{fig:test_rank}所示，在传播价值$\geq$0.4、增长概率$\geq$0.4的筛选条件下，排名第1的Human评论传播价值0.820、增长概率0.880，排名第2的Agent评论传播价值0.790、增长概率0.830，Human与Agent在高排名区域均有分布，体现系统对不同主体传播潜力的无偏评估。用户可点击任意条目的"树图"按钮跳转至该评论所在评论树的可视化视图，实现从列表到图表的联动。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{TEST/综合评估结果排序功能测试.png}
@@ -238,6 +245,7 @@
 
 在该视图中，节点颜色区分主体类型（蓝色为Human、橙色为Agent），节点大小与传播价值评分成正比，底部图例标注数据集名称、节点统计及编码规则。该可视化直观呈现了模型对评论传播潜力的区分能力：在同一父节点下，有后续回复的子节点圆形明显大于无回复的兄弟节点，表明模型在相同讨论上下文下能够识别不同评论的传播价值差异。将鼠标悬停在一个圆形极小的叶子节点上，浮动提示显示其传播价值评分仅0.0600、增长概率0.0400，评论内容为单个表情符号——信息量低且未获得回复，与模型给出的低传播价值评分一致。从整体分布看，大节点（高传播价值）多出现在讨论活跃的分支上，小节点（低传播价值）多为讨论终止的叶子节点，评分分布与评论树的实际传播结构相符，验证了第四章模型作为消息层评估核心模块的有效性。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{TEST/评论传播价值评估测试用例.png}
@@ -251,6 +259,7 @@
 
 在该视图中，连边颜色编码2跳增长概率：红色粗线表示高增长概率、橙色中等线表示中等概率、浅灰细线表示低概率。根节点到多个一级回复的边多为红色粗线，表明这些路径的起始段具有较高的传播延续概率。沿讨论链追踪可观察到两类典型模式：部分路径从红色逐步过渡到橙色再到灰色，反映传播延续能力随路径深度递减；另有路径持续保持红色或橙色延伸至较深层级，表示讨论链具有较强的延续动能。对比不同分支，短分支以灰色细线为主，讨论在浅层终止；长分支包含连续的红色或橙色边，讨论延续至较深层级。上述视觉模式表明第五章IHPE模型能够有效区分不同讨论链的传播延续能力，为系统的路径层评估提供了可靠的预测支撑。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{TEST/传播延续预测测试用例.png}
@@ -264,6 +273,7 @@
 
 系统完成评估推理后，用户在对比分析页面加载目标数据集，页面首先展示8张关键指标卡片，分别呈现Human与Agent的评论数、传播价值评分均值、增长概率均值及正面情感概率均值，提供两类主体传播特征的概览。页面下方包含四组对比图表：传播价值评分分布对比图与2跳增长概率分布对比图均以10个区间为横轴、蓝色系列Human与橙色系列Agent的频次为纵轴；情感倾向对比图以正面、中性、负面三类情感为横轴展示两类主体的情感概率均值差异；交互类型$\times$增长概率均值图以H$\to$H、H$\to$A、A$\to$H、A$\to$A四种交互类型为横轴，对比不同主体组合下的传播延续表现。页面底部展示系统调用大语言模型后端生成的三段式分析报告，依次涵盖传播价值差异、传播延续差异与交互类型影响、综合结论，报告支持导出为纯文本文件。该功能将两个核心模型的评估结果从个体节点层面提升至主体群体层面的系统性对比，实现了论文"从多主体视角量化信息传播影响力差异"的评估目标。
 
+\vspace{0.5\baselineskip}
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{TEST/多主体对比分析与报告生成测试用例.png}
