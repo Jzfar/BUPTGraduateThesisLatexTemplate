@@ -49,7 +49,8 @@ y_k = \begin{cases}
   \centering
   \caption{路径边异构交互类型定义与传播特征假设}
   \label{tab:interaction_type}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{1.8cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{7cm}}
     \toprule
     交互类型 & 含义 & 传播特征假设 \\
@@ -64,15 +65,7 @@ y_k = \begin{cases}
 
 数据分析显示Agent节点的2跳增长率（52.75\%）远高于Human（10.45\%），说明主体类型及其交互模式是影响传播延续的关键因素。针对这一多主体异构路径的建模需求，本章提出交互感知的异构路径编码器（Interaction-aware Heterogeneous Path Encoder, IHPE），遵循"轻量特征注入，避免重参数化"的设计原则：将主体类型信息作为特征输入而非参数选择器，在保持多主体感知能力的同时规避Agent侧参数过拟合风险；路径聚合采用均匀池化（Mean Pooling），在路径长度中位数仅为3的数据特征下以更稳健的方式提取路径级表示。
 
-IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分类预测"的五阶段架构，以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入单元，端到端预测节点$v_k$的传播延续概率。模型整体结构如图\ref{fig:ihpe_arch}所示。
-
-\vspace{0.5\baselineskip}
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
-  \caption{交互感知的异构路径编码器（IHPE）整体结构}
-  \label{fig:ihpe_arch}
-\end{figure}
+IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分类预测"的五阶段架构，以路径$P_k = [v_0, v_1, \ldots, v_k]$为输入单元，端到端预测节点$v_k$的传播延续概率。
 
 模型的处理流程可概括为以下五个阶段：
 
@@ -85,6 +78,16 @@ IHPE模型采用"节点编码—交互注入—序列编码—路径聚合—分
 \textbf{（4）路径聚合阶段}：对序列编码输出进行Mean Pooling得到全局路径表示，与末节点表示$\mathbf{h}_k$拼接后经MLP映射为路径级表示$\mathbf{h}_{\text{path}}$，同时保留全局上下文与末节点局部信息。
 
 \textbf{（5）分类预测阶段}：路径表示经MLP分类头与Sigmoid函数，输出节点$v_k$在时间窗口$T$内实现2跳增长的概率。训练采用带正类权重的二元交叉熵损失以缓解类别不平衡。
+
+模型整体结构如图\ref{fig:ihpe_arch}所示。
+
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.70\textwidth]{G4-1/图3 交互感知的异构路径编码器结构图.cropped.pdf}
+  \caption{交互感知的异构路径编码器（IHPE）整体结构}
+  \label{fig:ihpe_arch}
+\end{figure}
 
 各阶段的具体设计与参数形式详见5.3.2—5.3.6节。
 
@@ -228,7 +231,8 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
   \centering
   \caption{数据集统计与标签分布（右删失过滤后，$T=12\text{h}$）}
   \label{tab:ch5_dataset}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{5.5cm} >{\centering\arraybackslash}m{6cm}}
     \toprule
     指\quad 标 & 数\quad 值 \\
@@ -282,11 +286,11 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 整体性能对比结果如表\ref{tab:ch5_overall}所示。
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{各模型整体性能对比}
   \label{tab:ch5_overall}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
   \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm}}
     \toprule
@@ -306,11 +310,12 @@ e_i = (a_{i-1}, a_i) \in \{(0,0), (0,1), (1,0), (1,1)\}
 
 分主体性能对比结果如表\ref{tab:ch5_peragent}所示。
 
-\begin{table}[H]
+\begin{table}[!htbp]
   \centering
   \caption{各模型分主体性能对比}
   \label{tab:ch5_peragent}
-  \renewcommand\arraystretch{1.5}
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand\arraystretch{1.1}
   \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm}}
     \toprule
@@ -352,8 +357,8 @@ IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提�
   \centering
   \caption{核心组件消融实验结果（整体）}
   \label{tab:ch5_ablation}
-  \renewcommand\arraystretch{1.5}
-  \footnotesize
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \setlength{\tabcolsep}{3pt}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.3cm}}
     \toprule
@@ -372,8 +377,8 @@ IHPE与LSTM基线的唯一差异在于交互类型编码。IHPE在AUC-PR上提�
   \centering
   \caption{核心组件消融实验结果（分主体）}
   \label{tab:ch5_ablation_agent}
-  \renewcommand\arraystretch{1.5}
-  \footnotesize
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm} >{\centering\arraybackslash}m{1.5cm}}
     \toprule
     \multirow{2}{*}{消融变体} & \multicolumn{3}{c}{Human} & \multicolumn{3}{c}{Agent} \\

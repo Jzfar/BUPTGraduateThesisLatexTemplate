@@ -104,15 +104,7 @@
 
 \subsection{系统流程设计}
 
-系统的核心业务流程如图\ref{fig:business_flow}所示，涵盖从数据导入到评估结果展示的端到端流程：
-
-\vspace{0.5\baselineskip}
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.85\textwidth]{G5-4/图5-4 系统业务流程图.cropped.pdf}
-  \caption{系统业务流程图}
-  \label{fig:business_flow}
-\end{figure}
+系统的核心业务流程涵盖从数据导入到评估结果展示的端到端流程，整体流程如图\ref{fig:business_flow}所示，具体包括以下三个环节。
 
 \textbf{（1）数据导入流程}
 
@@ -128,6 +120,14 @@
 
 用户选择目标评论树或话题后，系统加载对应的评论树结构与评估结果并渲染可视化视图。用户可通过节点点击、路径选择或主体类型筛选等交互操作，动态更新展示内容。
 
+\vspace{0.5\baselineskip}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{G5-4/图5-4 系统业务流程图.cropped.pdf}
+  \caption{系统业务流程图}
+  \label{fig:business_flow}
+\end{figure}
+
 \subsection{系统数据库设计}
 
 数据存储模块负责系统全流程数据的结构化持久存储，为数据导入模块提供写入接口，为评估模块、对比分析模块和可视化模块提供读取接口。系统采用SQLite作为存储引擎，设计5张数据表，覆盖从原始数据到评估结果的完整数据链路。
@@ -140,8 +140,8 @@
   \centering
   \caption{导入任务表}
   \label{tab:import_task}
-  \linespread{1}\fontsize{12.045pt}{0.66cm}\selectfont
-  \renewcommand\arraystretch{1}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{7.5cm}}
     \toprule
     字段名称 & 数据类型 & 描述信息 \\
@@ -159,7 +159,6 @@
   \end{tabular}
 \end{table}
 
-\newpage
 \textbf{（2）评论数据表（comment）}
 
 存储经预处理后的评论数据，是系统的核心数据表。每条记录对应一条评论，包含评论文本、发布时间、发布者信息及主体类型标注等原始字段，同时记录该评论在评论树中的结构信息：通过in\_reply\_to\_tweet\_id字段建立父子回复关系，通过root\_tweet\_id字段关联所属评论树的根推文，通过depth字段标记节点在树中的层级深度。此外，eligible\_for\_value\_eval字段标记该评论是否可用于传播价值评估（空文本节点标记为False）。评论数据表结构如表\ref{tab:comment}所示。
@@ -168,8 +167,8 @@
   \centering
   \caption{评论数据表}
   \label{tab:comment}
-  \linespread{1}\fontsize{12.045pt}{0.66cm}\selectfont
-  \renewcommand\arraystretch{1}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{4cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7cm}}
     \toprule
     字段名称 & 数据类型 & 描述信息 \\
@@ -201,7 +200,8 @@
   \centering
   \caption{评论特征表}
   \label{tab:comment_feature}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{8cm}}
     \toprule
     字段名称 & 数据类型 & 描述信息 \\
@@ -226,7 +226,8 @@
   \centering
   \caption{评估结果表}
   \label{tab:eval_result}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3.5cm} >{\centering\arraybackslash}m{2.5cm} >{\centering\arraybackslash}m{7.5cm}}
     \toprule
     字段名称 & 数据类型 & 描述信息 \\
@@ -246,7 +247,8 @@
   \centering
   \caption{对比分析结果表}
   \label{tab:analysis_report}
-  \renewcommand\arraystretch{1.5}
+  \renewcommand\arraystretch{1.35}
+  \zihao{5}
   \begin{tabular}{>{\centering\arraybackslash}m{3cm} >{\centering\arraybackslash}m{2cm} >{\centering\arraybackslash}m{8.5cm}}
     \toprule
     字段名称 & 数据类型 & 描述信息 \\
