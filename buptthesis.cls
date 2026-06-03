@@ -34,6 +34,7 @@
 \newif\ifBUPT@option@phil            \BUPT@option@philtrue
 \newif\ifBUPT@option@eng             \BUPT@option@engfalse
 \newif\ifBUPT@option@blind           \BUPT@option@blindfalse
+\newif\ifBUPT@option@statementsign   \BUPT@option@statementsigntrue
 
 %%blankdblpage
 
@@ -73,6 +74,9 @@
   \BUPT@option@draftclstrue}
 \DeclareOption{blind}{
   \BUPT@option@blindtrue%
+}
+\DeclareOption{statementblank}{
+  \BUPT@option@statementsignfalse%
 }
 
 \DeclareOption{cenhdr}{%
@@ -544,6 +548,10 @@
 }
 
 \def\BUPTunderline#1#2{\underline{\hbox to #1{\hss #2\hss}}}
+\newcommand{\BUPTsignature}[2][8mm]{%
+  \makebox[32mm][l]{\raisebox{-1.2mm}{\includegraphics[height=#1,keepaspectratio]{#2}}}%
+}
+\newcommand{\BUPTstatementdate}{2026 年 6 月 1 日}
 \def\makechinesetitle{%
   \begin{flushright}
     \zihao{4}\bfseries \BUPT@label@confidential\BUPT@value@confidential~~~~
@@ -756,7 +764,13 @@
   \vskip 5\p@
   {\zihao{-4} \BUPT@label@innovationparagraph}
   \vskip 15\p@
-  \BUPT@label@authorsignature\BUPTunderline{100\p@}{}\hfil\BUPT@label@issuedate\BUPTunderline{100\p@}{}
+  \BUPT@label@authorsignature
+  \ifBUPT@option@statementsign
+    \BUPTsignature{resources/贾志远签名.jpg}%
+  \else
+    \BUPTunderline{32mm}{}%
+  \fi
+  \hfil\BUPT@label@issuedate\BUPTstatementdate
   \vskip 55\p@
   \begin{center}
     {\heiti \zihao{3} \BUPT@label@authorizationtitle}
@@ -765,9 +779,21 @@
   {\zihao{-4} \BUPT@label@authorizationparagraph}\par
   {\zihao{-4} \BUPT@label@authorizationcomment}
   \vskip 15\p@
-  \BUPT@label@authorsignature\BUPTunderline{100\p@}{}\hfil\BUPT@label@issuedate\BUPTunderline{100\p@}{}
+  \BUPT@label@authorsignature
+  \ifBUPT@option@statementsign
+    \BUPTsignature{resources/贾志远签名.jpg}%
+  \else
+    \BUPTunderline{32mm}{}%
+  \fi
+  \hfil\BUPT@label@issuedate\BUPTstatementdate
   \vskip 15\p@
-  \BUPT@label@supervisorsignature\BUPTunderline{100\p@}{}\hfil\BUPT@label@issuedate\BUPTunderline{100\p@}{}
+  \BUPT@label@supervisorsignature
+  \ifBUPT@option@statementsign
+    \BUPTsignature{resources/程渤签名.jpg}%
+  \else
+    \BUPTunderline{32mm}{}%
+  \fi
+  \hfil\BUPT@label@issuedate\BUPTstatementdate
   \cleardoublepage
 }%
 
